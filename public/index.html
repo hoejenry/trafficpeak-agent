@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrafficPeak Analytics</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #009bde;
+    --accent2: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --teal: #39d353;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --mono: 'SF Mono', 'Fira Code', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Header ── */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; gap: 14px; height: 54px; flex-shrink: 0; }
+  .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .logo-icon { color: var(--accent); }
+  .tabs { display: flex; gap: 2px; }
+  .tab { padding: 6px 14px; border-radius: var(--radius); cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500; border: none; background: none; transition: all .15s; }
+  .tab:hover { color: var(--text); background: var(--surface2); }
+  .tab.active { color: var(--accent2); background: var(--surface2); }
+  .account-wrap { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .account-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .account-select { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 5px 28px 5px 10px; font-size: 13px; max-width: 200px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; cursor: pointer; }
+  .account-select:focus { outline: none; border-color: var(--accent); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .status-dot.live { background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .manage-btn { display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); padding: 5px 11px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s; white-space: nowrap; }
+  .manage-btn:hover { color: var(--text); border-color: var(--accent); }
+  .manage-btn.live { color: var(--green); border-color: #3fb95044; }
+
+  /* ── Views ── */
+  main { flex: 1; overflow: hidden; display: flex; }
+  .view { display: none; flex: 1; overflow: hidden; }
+  .view.active { display: flex; }
+
+  /* ── Explorer view ── */
+  .explorer { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: 240px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .sidebar-body { flex: 1; overflow-y: auto; padding: 8px 6px; }
+  .db-item { padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: var(--mono); color: var(--muted); display: flex; align-items: center; gap: 7px; user-select: none; }
+  .db-item:hover { background: var(--surface2); color: var(--text); }
+  .db-item.open { color: var(--accent2); background: #009bde14; }
+  .db-item .chevron { transition: transform .15s; font-size: 10px; flex-shrink: 0; }
+  .db-item.open .chevron { transform: rotate(90deg); }
+  .table-list { padding-left: 6px; }
+  .tbl-item { padding: 4px 10px 4px 22px; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: var(--mono); color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .tbl-item:hover { background: var(--surface2); color: var(--text); }
+  .tbl-item.active { color: var(--accent); background: #009bde0d; }
+  .tbl-item .tbl-icon { opacity: .5; flex-shrink: 0; }
+
+  /* ── Query panel ── */
+  .query-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .query-editor { flex-shrink: 0; }
+  .editor-header { padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .editor-ctx { font-family: var(--mono); color: var(--accent2); font-size: 11px; }
+  textarea#sql { width: 100%; background: var(--surface2); border: none; border-bottom: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 14px 16px; resize: none; outline: none; line-height: 1.55; min-height: 130px; max-height: 280px; }
+  .editor-footer { padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .run-btn { background: var(--accent); color: #fff; border: none; border-radius: var(--radius); padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .run-btn:hover:not(:disabled) { opacity: .9; }
+  .run-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .clear-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: var(--radius); padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .clear-btn:hover { color: var(--text); border-color: var(--text); }
+  .kbd-hint { font-size: 11px; color: var(--muted); }
+  .elapsed { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  /* ── Results ── */
+  .results-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .results-header { padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .results-body { flex: 1; overflow: auto; }
+  .results-body table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .results-body th { position: sticky; top: 0; background: var(--surface2); color: var(--muted); font-weight: 500; padding: 6px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; z-index: 1; }
+  .results-body td { padding: 6px 12px; border-bottom: 1px solid #21262d; white-space: nowrap; font-family: var(--mono); }
+  .results-body tr:hover td { background: var(--surface2); }
+  .howto { padding: 24px; color: var(--muted); font-size: 13px; }
+  .howto h3 { font-size: 12px; font-weight: 600; color: var(--accent2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
+  .howto ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .howto li { padding-left: 14px; position: relative; }
+  .howto li::before { content: '→'; position: absolute; left: 0; color: var(--accent); }
+  .howto code { background: var(--surface2); padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 12px; }
+
+  /* ── Chat view ── */
+  .chat-wrap { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 800px; width: 100%; }
+  .msg.user { align-self: flex-end; }
+  .msg.assistant { align-self: flex-start; }
+  .bubble { padding: 12px 16px; border-radius: var(--radius); line-height: 1.65; }
+  .msg.user .bubble { background: var(--accent); color: #fff; border-radius: var(--radius) var(--radius) 4px var(--radius); }
+  .msg.assistant .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius) var(--radius) var(--radius) 4px; }
+  .bubble pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; font-family: var(--mono); font-size: 12px; margin: 8px 0; white-space: pre-wrap; word-break: break-word; }
+  .tool-call { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; margin: 6px 0; font-size: 12px; }
+  .tool-name { color: var(--accent2); font-weight: 600; font-family: var(--mono); }
+  .tool-args { color: var(--muted); font-family: var(--mono); margin-top: 3px; }
+  .tool-ok { font-size: 11px; color: var(--green); font-weight: 600; margin-bottom: 3px; }
+  .typing { display: flex; gap: 4px; padding: 14px 16px; }
+  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bounce .8s infinite; }
+  .typing span:nth-child(2) { animation-delay: .15s; }
+  .typing span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-7px)} }
+  .quick-prompts { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 24px 10px; }
+  .qp { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--muted); transition: all .15s; }
+  .qp:hover { color: var(--text); border-color: var(--accent2); }
+  .chat-input-row { padding: 14px 20px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 10px; }
+  .chat-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 10px 14px; font-size: 14px; resize: none; font-family: var(--font); line-height: 1.4; min-height: 44px; max-height: 120px; overflow-y: auto; }
+  .chat-input:focus { outline: none; border-color: var(--accent); }
+  .send-btn { background: var(--accent); color: #fff; border: none; border-radius: var(--radius); padding: 10px 18px; font-size: 14px; font-weight: 500; cursor: pointer; align-self: flex-end; }
+  .send-btn:hover:not(:disabled) { opacity: .9; }
+  .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Modal ── */
+  .backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; align-items: center; justify-content: center; }
+  .backdrop.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 520px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,.5); }
+  .modal-hd { padding: 16px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 2px 6px; border-radius: 4px; line-height: 1; }
+  .modal-close:hover { color: var(--text); background: var(--surface2); }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+  .modal-ft { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; letter-spacing: .03em; }
+  .field input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 11px; font-size: 13px; font-family: var(--mono); }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field input::placeholder { color: var(--muted); font-family: var(--font); }
+  .field-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn { padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: .9; }
+  .btn-ghost { background: none; border: 1px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+  .btn-danger { background: none; border: 1px solid #f8514944; color: var(--red); }
+  .btn-danger:hover { background: #f8514911; }
+  .drop-zone { border: 1.5px dashed var(--border); border-radius: 7px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); cursor: pointer; transition: all .15s; margin-bottom: 14px; }
+  .drop-zone:hover, .drop-zone.drag { border-color: var(--accent); color: var(--text); background: #009bde08; }
+  .import-link { color: var(--accent2); text-decoration: underline; }
+  .import-ok { font-size: 12px; color: var(--green); margin-bottom: 10px; }
+  .account-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; background: var(--surface2); margin-bottom: 6px; }
+  .account-row.active-acct { border: 1px solid var(--accent); }
+  .account-row .aname { font-family: var(--mono); font-size: 12px; flex: 1; }
+  .account-row .aurl { font-size: 11px; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mini-btn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); padding: 2px 8px; font-size: 11px; cursor: pointer; }
+  .mini-btn:hover { color: var(--text); border-color: var(--text); }
+  .mini-btn.danger:hover { color: var(--red); border-color: var(--red); }
+  .badge { display: inline-flex; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge.green { background: #3fb95022; color: var(--green); }
+  .badge.yellow { background: #d2992222; color: var(--yellow); }
+  .badge.blue { background: #58a6ff22; color: var(--accent2); }
+  .section-lbl { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,.4); transform: translateY(80px); opacity: 0; transition: all .25s; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: #3fb95044; color: var(--green); }
+  .toast.error { border-color: #f8514944; color: var(--red); }
+  .err-msg { color: var(--red); font-size: 13px; padding: 16px; }
+  .loading { color: var(--muted); font-size: 12px; padding: 16px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Chart panel ── */
+  .results-toggle { display: flex; gap: 4px; margin-left: auto; }
+  .toggle-btn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); padding: 3px 10px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all .15s; }
+  .toggle-btn:hover { color: var(--text); border-color: var(--text); }
+  .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chart-panel { flex: 1; overflow: hidden; display: none; padding: 16px 20px; flex-direction: column; gap: 10px; }
+  .chart-panel.visible { display: flex; }
+  .chart-wrap { position: relative; flex: 1; min-height: 0; }
+
+  /* ── Tips view ── */
+  .tips-view { flex: 1; overflow-y: auto; padding: 28px 36px; }
+  .tips-section { margin-bottom: 32px; }
+  .tips-section h2 { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .tips-section h2 .ti { color: var(--accent); }
+  .tips-section p { color: var(--muted); font-size: 13px; line-height: 1.7; margin-bottom: 8px; }
+  .tips-section ul { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .tips-section li { font-size: 13px; color: var(--muted); padding-left: 18px; position: relative; line-height: 1.65; }
+  .tips-section li::before { content: '→'; position: absolute; left: 0; color: var(--accent); }
+  .tips-section code { background: var(--surface2); padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 12px; color: var(--accent2); }
+  .tips-section pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; font-family: var(--mono); font-size: 12px; color: var(--text); overflow-x: auto; margin-bottom: 10px; line-height: 1.65; }
+  .tips-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+  .tips-table th { background: var(--surface2); color: var(--muted); padding: 7px 12px; text-align: left; border: 1px solid var(--border); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .tips-table td { padding: 7px 12px; border: 1px solid var(--border); color: var(--muted); vertical-align: top; }
+  .tips-table td:first-child { font-family: var(--mono); color: var(--text); white-space: nowrap; }
+  .lv { display: inline-block; background: #f8514922; color: var(--red); padding: 1px 7px; border-radius: 4px; font-family: var(--mono); font-size: 12px; }
+  .gv { display: inline-block; background: #3fb95022; color: var(--green); padding: 1px 7px; border-radius: 4px; font-family: var(--mono); font-size: 12px; }
+  .combo-box { background: var(--surface2); border: 1px solid #009bde44; border-radius: 7px; padding: 13px 16px; font-size: 13px; color: var(--text); font-family: var(--mono); line-height: 1.7; margin-bottom: 12px; }
+  .combo-label { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin-bottom: 6px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <svg class="logo-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    TrafficPeak
+  </div>
+
+  <nav class="tabs" style="margin-left:16px">
+    <button class="tab active" onclick="switchTab('explorer',this)">Explorer</button>
+    <button class="tab" onclick="switchTab('chat',this)">Chat</button>
+    <button class="tab" onclick="switchTab('tips',this)">Tips</button>
+  </nav>
+
+  <div class="account-wrap">
+    <span class="account-label">Account:</span>
+    <select class="account-select" id="account-select" onchange="setAccount(this.value)">
+      <option value="default">— none —</option>
+    </select>
+    <div class="status-dot" id="status-dot" title="Not connected"></div>
+    <button class="manage-btn" id="manage-btn" onclick="openModal()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      </svg>
+      Manage Accounts
+    </button>
+  </div>
+</header>
+
+<!-- ── Credentials Modal ── -->
+<div class="backdrop" id="modal" onclick="closeOnBackdrop(event)">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        TrafficPeak Accounts
+      </span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Saved accounts -->
+      <div id="saved-section" style="display:none;margin-bottom:20px">
+        <div class="section-lbl">Saved Accounts</div>
+        <div id="accounts-list"></div>
+      </div>
+
+      <!-- File upload -->
+      <div class="drop-zone" id="drop-zone"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDrop(event)"
+        onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".json,application/json" onchange="handleFileSelect(event)" style="display:none">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.6;flex-shrink:0">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span>Drop a <strong>.json</strong> credentials file, or <span class="import-link">browse</span></span>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:5px;padding:8px 11px;font-size:11px;color:var(--muted);margin-bottom:14px">
+        File format: <code style="font-family:var(--mono)">{&quot;name&quot;:&quot;…&quot;, &quot;url&quot;:&quot;https://…&quot;, &quot;token&quot;:&quot;eyJ…&quot;}</code>
+      </div>
+      <div class="import-ok" id="import-ok" style="display:none"></div>
+
+      <!-- Form -->
+      <div class="section-lbl" id="form-title">Add Account</div>
+      <div class="field-row">
+        <div class="field">
+          <label>ACCOUNT NAME</label>
+          <input id="f-name" placeholder="grafana-us">
+        </div>
+        <div class="field">
+          <label>TRAFFICPEAK URL</label>
+          <input id="f-url" placeholder="https://grafana-us.trafficpeak.live">
+        </div>
+      </div>
+      <div class="field">
+        <label>SERVICE ACCOUNT TOKEN</label>
+        <input id="f-token" type="password" placeholder="glsa_… or eyJ…">
+        <div class="field-hint">Grafana Service Account token (glsa_…) or JWT from your TrafficPeak admin</div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal()" style="margin-right:auto">Close</button>
+      <button class="btn btn-primary" onclick="saveAccount()">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ── Main ── -->
+<main>
+
+  <!-- EXPLORER -->
+  <div id="view-explorer" class="view active">
+    <div class="explorer">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6 2 2 5 2 8s4 6 10 6 10-3 10-6S18 2 12 2z"/><path d="M2 8v4c0 3 4 6 10 6s10-3 10-6V8"/><path d="M2 12v4c0 3 4 6 10 6s10-3 10-6v-4"/></svg>
+          Databases
+        </div>
+        <div class="sidebar-body" id="db-list">
+          <div class="loading">Connecting…</div>
+        </div>
+      </div>
+
+      <!-- Query + Results -->
+      <div class="query-panel">
+        <div class="query-editor">
+          <div class="editor-header">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Query Editor
+            <span class="editor-ctx" id="ctx-label"></span>
+          </div>
+          <textarea id="sql" placeholder="SELECT 1  -- click a table in the sidebar to get started"
+            onkeydown="handleEditorKey(event)"></textarea>
+          <div class="editor-footer">
+            <button class="run-btn" id="run-btn" onclick="runQuery()">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run
+            </button>
+            <button class="clear-btn" onclick="clearEditor()">Clear</button>
+            <span class="kbd-hint">⇧ Enter to run</span>
+            <span class="elapsed" id="elapsed"></span>
+          </div>
+        </div>
+
+        <div class="results-panel">
+          <div class="results-header" id="results-hd">
+            <span id="results-hd-text">Results</span>
+            <div class="results-toggle" id="results-toggle" style="display:none">
+              <button class="toggle-btn active" id="toggle-table" onclick="showResultsView('table')">⊞ Table</button>
+              <button class="toggle-btn" id="toggle-chart" onclick="showResultsView('chart')">◈ Chart</button>
+            </div>
+          </div>
+          <div class="results-body" id="results-body">
+            <div class="howto">
+              <h3>Getting started</h3>
+              <ul>
+                <li>Click a database in the sidebar to load its tables</li>
+                <li>Click a table to auto-fill a <code>SELECT *</code> query</li>
+                <li>Always use fully-qualified <code>database.table</code> — e.g. <code>nuclearregula.logs</code></li>
+                <li>Filter on <code>reqTimeSec</code> directly: <code>reqTimeSec &gt;= now() - INTERVAL 1 HOUR</code></li>
+                <li>Max time range is <strong>6 hours</strong> — wrapping <code>reqTimeSec</code> in a function is rejected</li>
+                <li>Do not pass a separate <code>database</code> field — include it in the SQL only</li>
+                <li>Press <strong>⇧ Enter</strong> or click <strong>Run</strong> to execute</li>
+              </ul>
+              <h3 style="margin-top:14px">Limits</h3>
+              <ul>
+                <li>Max <strong>100,000 rows</strong> per result · <strong>2 GiB</strong> memory · <strong>30-second</strong> timeout</li>
+                <li>Read-only — no writes, DDL, or schema changes</li>
+              </ul>
+              <h3 style="margin-top:14px">Optimal query pattern</h3>
+              <ul>
+                <li><em>Specific table</em> + <em>explicit time range</em> + <em>ORDER BY timestamp DESC</em></li>
+              </ul>
+              <h3 style="margin-top:14px">Charts</h3>
+              <ul>
+                <li>After running a query, click <strong>◈ Chart</strong> in the results header</li>
+                <li>Numeric columns are auto-detected — bar chart for categories, line for time-series</li>
+              </ul>
+            </div>
+          </div>
+          <div class="chart-panel" id="chart-panel">
+            <div class="chart-wrap"><canvas id="chart-canvas"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div id="view-chat" class="view">
+    <div class="chat-wrap">
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg assistant">
+          <div class="bubble">
+            Hi! I'm your TrafficPeak analytics assistant. I can explore your databases, describe table schemas, and write ClickHouse SQL queries in plain language.<br><br>
+            Try: <em>"What databases are available?"</em> or <em>"Show me the top 10 cache miss URLs from today."</em>
+          </div>
+        </div>
+      </div>
+      <div class="quick-prompts">
+        <div class="qp" onclick="sendQuick(this)">List all databases and their tables</div>
+        <div class="qp" onclick="sendQuick(this)">Top 10 cache-miss URLs from the logs table in the last hour, ordered by most recent timestamp</div>
+        <div class="qp" onclick="sendQuick(this)">HTTP error rate by edge POP from the logs table in the last hour, ordered by error count descending</div>
+        <div class="qp" onclick="sendQuick(this)">Top 5 countries by request volume from the logs table today, ordered by most recent timestamp</div>
+        <div class="qp" onclick="sendQuick(this)">Show me the schema of the logs table</div>
+        <div class="qp" onclick="sendQuick(this)">WAF blocked requests from the last hour grouped by rule, ordered by most recent timestamp</div>
+      </div>
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chat-input" placeholder="Ask a question about your traffic data…" rows="1"
+          onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIPS -->
+  <div id="view-tips" class="view">
+    <div class="tips-view">
+
+      <div class="tips-section">
+        <h2><span class="ti">✦</span> Best Practices</h2>
+        <p>Combining three things produces the fastest, most useful queries:</p>
+        <div class="two-col">
+          <div>
+            <ul>
+              <li><strong>Name the exact table</strong> — e.g. <code>logs.cdn_request_logs</code> not just "logs"</li>
+              <li><strong>Use an explicit time range</strong> — e.g. "last hour" triggers primary-key optimizations</li>
+              <li><strong>Request timestamp ordering</strong> — "ordered by most recent timestamp" improves performance</li>
+            </ul>
+          </div>
+          <div>
+            <div class="combo-label">Optimal pattern</div>
+            <div class="combo-box">Query the <em>logs</em> table from the <em>nuclearregula</em> database for all HTTP errors in the <em>last hour</em>, ordered by <em>most recent timestamp</em>.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tips-section">
+        <h2><span class="ti">⚠</span> Query Limits</h2>
+        <table class="tips-table">
+          <thead><tr><th>Limit</th><th>Value</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Max rows</td><td><span class="lv">100,000</span></td><td>Use <code>LIMIT</code> + filters to stay under</td></tr>
+            <tr><td>Memory cap</td><td><span class="lv">2 GiB</span></td><td>Aggregate before selecting wide result sets</td></tr>
+            <tr><td>Execution timeout</td><td><span class="lv">30 seconds</span></td><td>Always filter on <code>date</code> partition key</td></tr>
+            <tr><td>Access level</td><td><span class="gv">READ-ONLY</span></td><td>No writes, DDL, or schema changes possible</td></tr>
+            <tr><td>Retries</td><td><span class="lv">none</span></td><td>On timeout, reduce time range and try again</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tips-section">
+        <h2><span class="ti">⌘</span> ClickHouse SQL Cheat Sheet</h2>
+        <div class="two-col">
+          <div>
+            <table class="tips-table">
+              <thead><tr><th>Pattern</th><th>Use for</th></tr></thead>
+              <tbody>
+                <tr><td>reqTimeSec >= now() - INTERVAL 1 HOUR</td><td>Last hour — required, direct comparison only</td></tr>
+                <tr><td>reqTimeSec >= now() - INTERVAL 6 HOUR</td><td>Last 6 hours (server maximum)</td></tr>
+                <tr><td>toDate(reqTimeSec)</td><td>Extract date (display only — not for WHERE)</td></tr>
+                <tr><td>formatDateTime(reqTimeSec, '%H:%M')</td><td>Format time for display</td></tr>
+                <tr><td>toStartOfHour(reqTimeSec)</td><td>Bucket events by hour</td></tr>
+                <tr><td>toStartOfMinute(reqTimeSec)</td><td>Bucket events by minute</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <table class="tips-table">
+              <thead><tr><th>Function</th><th>Use for</th></tr></thead>
+              <tbody>
+                <tr><td>countIf(status &gt;= 400)</td><td>Conditional count (errors)</td></tr>
+                <tr><td>uniq(ip_address)</td><td>Approximate distinct count</td></tr>
+                <tr><td>groupArray(url)</td><td>Aggregate values into array</td></tr>
+                <tr><td>topK(10)(url)</td><td>Top-K most frequent values</td></tr>
+                <tr><td>quantile(0.95)(response_ms)</td><td>P95 latency</td></tr>
+                <tr><td>avg(bytes_sent)</td><td>Average bytes</td></tr>
+                <tr><td>sum(bytes_sent) / 1e9</td><td>Total GB transferred</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tips-section">
+        <h2><span class="ti">◈</span> Example Queries</h2>
+        <p>Copy these into the Explorer and run. All use real column names from <code>nuclearregula.logs</code>.</p>
+        <p style="font-size:12px;color:var(--yellow)">⚠ Max time range: 6 hours (21,600 s). Always filter on <code>reqTimeSec</code> directly — no function wrapping on the left side. Do not pass a separate <code>database</code> argument; use fully-qualified <code>database.table</code> in SQL.</p>
+        <pre>-- Top URLs by request count (last 6 hours)
+SELECT reqPath, count() AS hits
+FROM nuclearregula.logs
+WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+GROUP BY reqPath
+ORDER BY hits DESC
+LIMIT 20</pre>
+        <pre>-- Error rate by HTTP status code (last hour)
+SELECT statusCode, count() AS n
+FROM nuclearregula.logs
+WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
+GROUP BY statusCode
+ORDER BY n DESC</pre>
+        <pre>-- Requests per minute time-series (last hour)
+SELECT toStartOfMinute(reqTimeSec) AS minute,
+       count() AS requests,
+       countIf(statusCode >= 400) AS errors
+FROM nuclearregula.logs
+WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
+GROUP BY minute
+ORDER BY minute ASC</pre>
+        <pre>-- P95 response time by edge server country (last 6 hours)
+SELECT serverCountry,
+       quantile(0.95)(turnAroundTimeMSec) AS p95_ms,
+       count() AS requests
+FROM nuclearregula.logs
+WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+  AND turnAroundTimeMSec IS NOT NULL
+GROUP BY serverCountry
+ORDER BY p95_ms DESC
+LIMIT 20</pre>
+        <pre>-- Top source countries by bandwidth (last 6 hours)
+SELECT country,
+       round(sum(bytes) / 1e9, 2) AS gb_sent,
+       count() AS requests
+FROM nuclearregula.logs
+WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+  AND country IS NOT NULL
+GROUP BY country
+ORDER BY gb_sent DESC
+LIMIT 10</pre>
+        <pre>-- Cache hit rate by content type (last hour)
+SELECT rspContentType,
+       countIf(cacheStatus = 1) AS hits,
+       count() AS total,
+       round(countIf(cacheStatus = 1) / count() * 100, 1) AS hit_pct
+FROM nuclearregula.logs
+WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
+  AND rspContentType IS NOT NULL
+GROUP BY rspContentType
+ORDER BY total DESC
+LIMIT 15</pre>
+      </div>
+
+      <div class="tips-section">
+        <h2><span class="ti">🔑</span> Authentication &amp; Token Notes</h2>
+        <ul>
+          <li>TrafficPeak accepts a <strong>Grafana Service Account token</strong> (<code>glsa_…</code>) or an <strong>EdDSA JWT</strong> (<code>eyJ…</code>)</li>
+          <li>Tokens are JWTs — check expiry via the <code>exp</code> field in any JWT decoder (e.g. jwt.io)</li>
+          <li>A leaked token grants <strong>read-only SQL access only</strong> — no write path or privilege escalation exists</li>
+          <li>Rotate any exposed token via your TrafficPeak admin panel; update the saved account here with the new token</li>
+          <li>Each saved account maps to one TrafficPeak instance URL + token pair — use separate accounts for different regions (e.g. <code>ord</code>, <code>grafana-us</code>)</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let activeAccount = localStorage.getItem('tpAccount') || 'default';
+let currentDb     = null;
+let currentTable  = null;
+let dbTables      = {};     // cache: db → [table, …]
+let chatHistory   = [];
+let isStreaming   = false;
+let activeChart   = null;
+
+function acctHeaders(extra = {}) {
+  return { 'Content-Type': 'application/json', 'X-TP-Account': activeAccount, ...extra };
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ── Tab switching ──────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`view-${name}`).classList.add('active');
+}
+
+// ── Account management ─────────────────────────────────────────────────────────
+async function refreshAccounts() {
+  const res  = await fetch('/api/accounts');
+  const data = await res.json();
+  const accts = data.accounts || [];
+
+  const sel = document.getElementById('account-select');
+  const dot = document.getElementById('status-dot');
+  const btn = document.getElementById('manage-btn');
+
+  if (accts.length) {
+    sel.innerHTML = accts.map(a =>
+      `<option value="${a.account}"${a.account === activeAccount ? ' selected' : ''}>${a.account}</option>`
+    ).join('');
+    if (!accts.find(a => a.account === activeAccount)) {
+      activeAccount = accts[0].account;
+      localStorage.setItem('tpAccount', activeAccount);
+      sel.value = activeAccount;
+    }
+    dot.className = 'status-dot live';
+    dot.title = 'Connected';
+    btn.className = 'manage-btn live';
+  } else {
+    sel.innerHTML = '<option value="default">— no accounts —</option>';
+    dot.className = 'status-dot';
+    dot.title = 'Not connected';
+    btn.className = 'manage-btn';
+  }
+
+  // Render modal list
+  const savedSec = document.getElementById('saved-section');
+  const list     = document.getElementById('accounts-list');
+  if (accts.length) {
+    savedSec.style.display = '';
+    list.innerHTML = accts.map(a => `
+      <div class="account-row${a.account === activeAccount ? ' active-acct' : ''}">
+        <span class="aname">${esc(a.account)}</span>
+        <span class="aurl">${esc(a.url || '—')}</span>
+        ${a.source === 'claude-cli' ? '<span class="badge blue" title="Imported from claude mcp add">CLI</span>' : ''}
+        <span class="badge ${a.hasToken ? 'green' : 'yellow'}">${a.hasToken ? '✓' : '!'}</span>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button class="mini-btn" onclick="setAccount('${esc(a.account)}');closeModal()">Switch</button>
+          ${a.source !== 'claude-cli' ? `<button class="mini-btn danger" onclick="deleteAccount('${esc(a.account)}')">Delete</button>` : ''}
+        </div>
+      </div>`).join('');
+  } else {
+    savedSec.style.display = 'none';
+  }
+}
+
+function setAccount(name) {
+  activeAccount = name;
+  localStorage.setItem('tpAccount', name);
+  const sel = document.getElementById('account-select');
+  if (sel) sel.value = name;
+  currentDb = null; currentTable = null; dbTables = {};
+  loadDatabases();
+}
+
+async function saveAccount() {
+  const name  = document.getElementById('f-name').value.trim();
+  const url   = document.getElementById('f-url').value.trim();
+  const token = document.getElementById('f-token').value.trim();
+  if (!name || !url || !token) { toast('Account name, URL, and token are required', 'error'); return; }
+  const res  = await fetch('/api/accounts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account: name, url, token }),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Save failed', 'error'); return; }
+  toast(`[${name}] saved`, 'success');
+  clearForm();
+  await refreshAccounts();
+  setAccount(name);
+}
+
+async function deleteAccount(name) {
+  if (!confirm(`Delete account [${name}]?`)) return;
+  await fetch('/api/accounts', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account: name }),
+  });
+  toast(`[${name}] deleted`);
+  await refreshAccounts();
+  if (activeAccount === name) { activeAccount = 'default'; loadDatabases(); }
+}
+
+function clearForm() {
+  ['f-name','f-url','f-token'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('import-ok').style.display = 'none';
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────────
+function openModal()  { document.getElementById('modal').classList.add('open'); clearForm(); refreshAccounts(); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function closeOnBackdrop(e) { if (e.target === document.getElementById('modal')) closeModal(); }
+
+// ── File upload ────────────────────────────────────────────────────────────────
+function handleFileSelect(e) { if (e.target.files[0]) readFile(e.target.files[0]); e.target.value = ''; }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+}
+function readFile(file) {
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const obj = JSON.parse(ev.target.result);
+      if (obj.name)  document.getElementById('f-name').value  = obj.name;
+      if (obj.url)   document.getElementById('f-url').value   = obj.url;
+      if (obj.token) document.getElementById('f-token').value = obj.token;
+      const ok = document.getElementById('import-ok');
+      ok.textContent = `✓ ${file.name} imported${obj.name ? ` — ${obj.name}` : ''}`;
+      ok.style.display = '';
+      toast('File loaded — review and click Save Account', 'success');
+    } catch { toast('Invalid JSON — expected {name, url, token}', 'error'); }
+  };
+  r.readAsText(file);
+}
+
+// ── Database / table explorer ──────────────────────────────────────────────────
+async function loadDatabases() {
+  const el = document.getElementById('db-list');
+  el.innerHTML = '<div class="loading">Connecting…</div>';
+  setResult('<div class="howto"><h3>Getting started</h3><ul><li>Click a database to load its tables</li><li>Click a table to auto-fill a query</li></ul></div>', 'Results');
+
+  try {
+    const res  = await fetch('/api/databases', { headers: { 'X-TP-Account': activeAccount } });
+    const data = await res.json();
+
+    if (data.error) {
+      const noAcct = data.error.includes('No TrafficPeak credentials');
+      el.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:4px 6px">${
+        noAcct
+          ? 'No account configured.<br><br><span style="color:var(--accent2);cursor:pointer" onclick="openModal()">Add an account →</span>'
+          : esc(data.error)
+      }</div>`;
+      return;
+    }
+
+    let dbs = parsePrimitive(data);
+    if (!dbs.length) { el.innerHTML = '<div class="loading">No databases found</div>'; return; }
+
+    renderDbList(dbs, null, null);
+  } catch (err) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--red);padding:4px 6px">${esc(err.message)}</div>`;
+  }
+}
+
+function parsePrimitive(data) {
+  if (Array.isArray(data)) return data.map(d => (typeof d === 'string' ? d : String(d)));
+  if (Array.isArray(data.databases)) return data.databases.map(String);
+  if (Array.isArray(data.tables)) return data.tables.map(String);
+  if (data.text) { try { return JSON.parse(data.text).map(String); } catch { return [data.text]; } }
+  return [];
+}
+
+let _allDbs = [];
+function renderDbList(dbs, openDb, tables) {
+  if (dbs.length) _allDbs = dbs;
+  const list = _allDbs;
+  const el = document.getElementById('db-list');
+  el.innerHTML = list.map(db => {
+    const isOpen = db === openDb;
+    let html = `<div class="db-item${isOpen ? ' open' : ''}" onclick="toggleDb('${esc(db)}')">
+      <span class="chevron">▶</span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:.6"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+      ${esc(db)}
+    </div>`;
+    if (isOpen && tables) {
+      html += `<div class="table-list">${tables.map(t => `
+        <div class="tbl-item${t === currentTable ? ' active' : ''}" onclick="selectTable('${esc(db)}','${esc(t)}')">
+          <svg class="tbl-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+          ${esc(t)}
+        </div>`).join('')}
+      </div>`;
+    }
+    return html;
+  }).join('');
+}
+
+async function toggleDb(db) {
+  if (currentDb === db) {
+    currentDb = null;
+    renderDbList(_allDbs, null, null);
+    return;
+  }
+  currentDb = db;
+  renderDbList(_allDbs, db, null);
+
+  try {
+    const res  = await fetch(`/api/tables?database=${encodeURIComponent(db)}`, { headers: { 'X-TP-Account': activeAccount } });
+    const data = await res.json();
+    const tables = parsePrimitive(data);
+    dbTables[db] = tables;
+    renderDbList(_allDbs, db, tables);
+  } catch { /* keep db open */ }
+}
+
+function selectTable(db, table) {
+  currentDb = db; currentTable = table;
+  document.getElementById('ctx-label').textContent = `${db}.${table}`;
+  document.getElementById('sql').value = `SELECT *\nFROM ${db}.${table}\nWHERE date = today()\nLIMIT 100`;
+  renderDbList(_allDbs, db, dbTables[db] || []);
+}
+
+// ── Query runner ───────────────────────────────────────────────────────────────
+function handleEditorKey(e) {
+  if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); runQuery(); }
+}
+
+function clearEditor() {
+  document.getElementById('sql').value = '';
+  document.getElementById('ctx-label').textContent = '';
+  document.getElementById('elapsed').textContent = '';
+  setResult('<div class="howto"><h3>Ready</h3><ul><li>Write a query above and press ⇧ Enter to run</li></ul></div>', 'Results');
+}
+
+function setResult(html, title) {
+  document.getElementById('results-hd-text').textContent = title;
+  document.getElementById('results-body').innerHTML = html;
+  document.getElementById('results-body').style.display = '';
+  document.getElementById('results-toggle').style.display = 'none';
+  const cp = document.getElementById('chart-panel');
+  cp.classList.remove('visible');
+  if (activeChart) { activeChart.destroy(); activeChart = null; }
+}
+
+// ── Chart rendering ────────────────────────────────────────────────────────────
+function showResultsView(view) {
+  const body      = document.getElementById('results-body');
+  const chartPanel = document.getElementById('chart-panel');
+  const btnTable  = document.getElementById('toggle-table');
+  const btnChart  = document.getElementById('toggle-chart');
+  if (view === 'chart') {
+    body.style.display = 'none';
+    chartPanel.classList.add('visible');
+    btnTable.classList.remove('active');
+    btnChart.classList.add('active');
+  } else {
+    body.style.display = '';
+    chartPanel.classList.remove('visible');
+    btnTable.classList.add('active');
+    btnChart.classList.remove('active');
+  }
+}
+
+function renderChart(rows, cols) {
+  const toggle = document.getElementById('results-toggle');
+  const panel  = document.getElementById('chart-panel');
+
+  if (!rows.length || !cols.length) return;
+
+  const colIndex = c => cols.indexOf(c);
+
+  // Identify numeric columns (all values parseable as numbers)
+  const numericCols = cols.filter(c => {
+    return rows.every(r => {
+      const v = Array.isArray(r) ? r[colIndex(c)] : r[c];
+      return v != null && v !== '' && !isNaN(parseFloat(String(v)));
+    });
+  });
+
+  if (!numericCols.length) return; // no chart possible — just show table
+
+  // First non-numeric col (or row index) as labels
+  const labelCol = cols.find(c => !numericCols.includes(c));
+  const maxLabels = 200;
+  const sliced = rows.slice(0, maxLabels);
+  const labels = sliced.map((r, i) => {
+    if (!labelCol) return `${i + 1}`;
+    const v = Array.isArray(r) ? r[colIndex(labelCol)] : r[labelCol];
+    return String(v ?? i);
+  });
+
+  // Detect time-series: first label looks like a date/time
+  const isTimeSeries = /\d{4}-\d{2}-\d{2}|\d{2}:\d{2}/.test(labels[0] || '');
+  const chartType = isTimeSeries ? 'line' : 'bar';
+
+  const palette = ['#009bde','#3fb950','#d29922','#f85149','#58a6ff','#39d353','#a371f7','#ffa657'];
+
+  const datasets = numericCols.map((col, i) => {
+    const color = palette[i % palette.length];
+    return {
+      label: col,
+      data: sliced.map(r => {
+        const v = Array.isArray(r) ? r[colIndex(col)] : r[col];
+        return parseFloat(String(v)) || 0;
+      }),
+      backgroundColor: chartType === 'bar' ? color + '99' : color + '33',
+      borderColor: color,
+      borderWidth: chartType === 'line' ? 2 : 1,
+      tension: 0.35,
+      fill: false,
+      pointRadius: chartType === 'line' ? (sliced.length > 60 ? 0 : 3) : 0,
+    };
+  });
+
+  if (activeChart) { activeChart.destroy(); activeChart = null; }
+
+  // Rebuild canvas to avoid Chart.js reuse issues
+  panel.innerHTML = '<div class="chart-wrap"><canvas id="chart-canvas"></canvas></div>';
+  const ctx = document.getElementById('chart-canvas').getContext('2d');
+
+  activeChart = new Chart(ctx, {
+    type: chartType,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      plugins: {
+        legend: { labels: { color: '#8b949e', font: { size: 12 }, boxWidth: 14 } },
+        tooltip: {
+          backgroundColor: '#161b22',
+          borderColor: '#30363d',
+          borderWidth: 1,
+          titleColor: '#e6edf3',
+          bodyColor: '#8b949e',
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8b949e', maxRotation: 45, font: { size: 11 }, maxTicksLimit: 20 },
+          grid: { color: '#21262d' },
+        },
+        y: {
+          ticks: { color: '#8b949e', font: { size: 11 } },
+          grid: { color: '#21262d' },
+        },
+      },
+    },
+  });
+
+  toggle.style.display = '';
+  if (rows.length > maxLabels) {
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:var(--muted);text-align:right;margin-top:4px';
+    note.textContent = `Showing first ${maxLabels} of ${rows.length.toLocaleString()} rows`;
+    panel.appendChild(note);
+  }
+}
+
+async function runQuery() {
+  const query = document.getElementById('sql').value.trim();
+  if (!query) return;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Running…';
+  setResult('<div class="loading">Executing…</div>', 'Results');
+  document.getElementById('elapsed').textContent = '';
+
+  const t0 = Date.now();
+  try {
+    const res  = await fetch('/api/query', {
+      method: 'POST',
+      headers: acctHeaders(),
+      body: JSON.stringify({ query, database: currentDb }),
+    });
+    const data = await res.json();
+    const ms   = Date.now() - t0;
+    document.getElementById('elapsed').textContent = `${(ms / 1000).toFixed(2)}s`;
+
+    if (data.error) {
+      setResult(`<div class="err-msg">${esc(data.error)}</div>`, 'Error');
+      return;
+    }
+
+    renderResults(data);
+  } catch (err) {
+    setResult(`<div class="err-msg">${esc(err.message)}</div>`, 'Error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run';
+  }
+}
+
+function renderResults(data) {
+  // Reset chart state
+  document.getElementById('results-toggle').style.display = 'none';
+  showResultsView('table');
+  if (activeChart) { activeChart.destroy(); activeChart = null; }
+
+  // Handle plain-text response
+  if (data.text && !data.rows && !Array.isArray(data)) {
+    setResult(`<pre style="padding:14px;font-family:var(--mono);font-size:12px;white-space:pre-wrap">${esc(data.text)}</pre>`, 'Result');
+    return;
+  }
+
+  let rows = [], cols = [];
+  if (data.rows && Array.isArray(data.rows)) {
+    rows = data.rows;
+    cols = data.columns || (rows[0] && typeof rows[0] === 'object' ? Object.keys(rows[0]) : []);
+  } else if (Array.isArray(data)) {
+    rows = data;
+    cols = rows.length && typeof rows[0] === 'object' ? Object.keys(rows[0]) : [];
+  }
+
+  const n = rows.length;
+  document.getElementById('results-hd-text').textContent = `Results — ${n.toLocaleString()} row${n !== 1 ? 's' : ''}`;
+
+  if (!n) {
+    document.getElementById('results-body').innerHTML = '<div style="padding:16px;color:var(--muted);font-size:13px">No rows returned</div>';
+    return;
+  }
+
+  const thead = cols.map(c => `<th>${esc(String(c))}</th>`).join('');
+  const tbody = rows.map(row => {
+    const vals = Array.isArray(row) ? row : cols.map(c => row[c]);
+    return `<tr>${vals.map(v => `<td>${esc(v == null ? '' : String(v))}</td>`).join('')}</tr>`;
+  }).join('');
+
+  document.getElementById('results-body').innerHTML = `
+    <table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+
+  // Auto-render chart if numeric columns exist
+  renderChart(rows, cols);
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────────
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+function sendQuick(el) {
+  document.getElementById('chat-input').value = el.textContent;
+  sendMessage();
+}
+function scrollChat() {
+  const el = document.getElementById('chat-messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+function appendMsg(role, html) {
+  const wrap = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  b.innerHTML = html;
+  div.appendChild(b);
+  wrap.appendChild(div);
+  scrollChat();
+  return b;
+}
+
+function addTyping() {
+  const wrap = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.id = 'typing';
+  div.innerHTML = '<div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  wrap.appendChild(div);
+  scrollChat();
+}
+function removeTyping() { const t = document.getElementById('typing'); if (t) t.remove(); }
+
+async function sendMessage() {
+  if (isStreaming) return;
+  const inp  = document.getElementById('chat-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  inp.style.height = 'auto';
+  document.getElementById('send-btn').disabled = true;
+  isStreaming = true;
+
+  appendMsg('user', esc(text));
+  chatHistory.push({ role: 'user', content: text });
+  addTyping();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: acctHeaders(),
+      body: JSON.stringify({ messages: chatHistory }),
+    });
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    removeTyping();
+    let bubble = null, assistantText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (ev.type === 'text') {
+          if (!bubble) {
+            const div = document.createElement('div');
+            div.className = 'msg assistant';
+            const b = document.createElement('div');
+            b.className = 'bubble';
+            div.appendChild(b);
+            document.getElementById('chat-messages').appendChild(div);
+            bubble = b;
+          }
+          assistantText += ev.text;
+          bubble.innerHTML = renderMd(assistantText);
+          scrollChat();
+
+        } else if (ev.type === 'tool_call') {
+          if (!bubble) {
+            const div = document.createElement('div');
+            div.className = 'msg assistant';
+            const b = document.createElement('div'); b.className = 'bubble';
+            div.appendChild(b);
+            document.getElementById('chat-messages').appendChild(div);
+            bubble = b;
+          }
+          const tc = document.createElement('div');
+          tc.className = 'tool-call';
+          tc.innerHTML = `<div class="tool-name">⚙ ${esc(ev.name)}</div>
+            <div class="tool-args">${esc(JSON.stringify(ev.input, null, 2))}</div>`;
+          bubble.appendChild(tc);
+          scrollChat();
+
+        } else if (ev.type === 'tool_result') {
+          const tr = document.createElement('div');
+          tr.className = 'tool-call';
+          const prev = JSON.stringify(ev.result).slice(0, 220);
+          tr.innerHTML = `<div class="tool-ok">✓ ${esc(ev.name)}</div>
+            <div class="tool-args">${esc(prev)}${prev.length >= 220 ? '…' : ''}</div>`;
+          if (bubble) bubble.appendChild(tr);
+          scrollChat();
+
+        } else if (ev.type === 'done') {
+          if (assistantText) chatHistory.push({ role: 'assistant', content: assistantText });
+        } else if (ev.type === 'error') {
+          appendMsg('assistant', `<span style="color:var(--red)">Error: ${esc(ev.message)}</span>`);
+        }
+      }
+    }
+  } catch (err) {
+    removeTyping();
+    appendMsg('assistant', `<span style="color:var(--red)">Connection error: ${esc(err.message)}</span>`);
+  } finally {
+    isStreaming = false;
+    document.getElementById('send-btn').disabled = false;
+    document.getElementById('chat-input').focus();
+  }
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function renderMd(text) {
+  return esc(text)
+    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+    .replace(/`([^`]+)`/g, '<code style="background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:var(--mono)">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+refreshAccounts().then(() => loadDatabases());
+</script>
+</body>
+</html>

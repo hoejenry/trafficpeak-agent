@@ -1,0 +1,14 @@
+{
+  "name": "trafficpeak-agent",
+  "version": "1.0.0",
+  "description": "TrafficPeak analytics UI — ClickHouse SQL explorer, chart visualization, and Claude-powered chat for Akamai edge data",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "express": "^5.2.1"
+  }
+}
