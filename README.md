@@ -4,6 +4,30 @@ A standalone analytics UI and Claude-powered chat assistant for [Akamai TrafficP
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 Browser (port 3001)                      │
+│  ┌───────────┐  ┌──────────────┐  ┌──────────────────┐  │
+│  │ Explorer  │  │     Chat     │  │      Tips        │  │
+│  │ SQL query │  │ Claude-AI    │  │ Query reference  │  │
+│  │ + charts  │  │ NL → SQL     │  │ + cheat sheet   │  │
+│  └─────┬─────┘  └──────┬───────┘  └──────────────────┘  │
+└────────┼───────────────┼──────────────────────────────── ┘
+         │               │
+      server.js (Express)
+         │               │
+    TrafficPeak       Anthropic API
+    ClickHouse API    (Claude chat)
+         │
+  src/tools/trafficpeak.js
+  (tp_list_databases, tp_list_tables,
+   tp_get_schema, tp_query)
+```
+
+---
+
 ## Features
 
 - **Explorer** — database and table browser, SQL query runner with auto-generated bar/line charts
@@ -105,6 +129,19 @@ Any `trafficpeak.live` server registered this way appears automatically in the a
 
 ---
 
+## Example chat prompts
+
+```
+Show me the top 10 URLs by request volume in the last hour
+What's the cache hit ratio for the last 3 hours?
+Break down traffic by country for the last 2 hours
+Show error rate trends over the past 6 hours
+Which edge servers are handling the most traffic right now?
+What's the 95th percentile response time by content type?
+```
+
+---
+
 ## Environment variables
 
 | Variable | Default | Description |
@@ -122,6 +159,24 @@ Any `trafficpeak.live` server registered this way appears automatically in the a
 ## Credential storage
 
 Credentials saved via the UI are stored in `~/.akamai-agent-trafficpeak.json` (mode 600). This file is never committed to git.
+
+---
+
+## Troubleshooting
+
+**"No databases found" or empty schema**
+- Confirm the service account token has read access to the target customer's data
+- Verify the TrafficPeak URL is reachable: `curl -I https://ord.trafficpeak.live`
+- Token may have expired — generate a new one in Grafana Service Accounts
+
+**Query times out**
+- Reduce the time window — max is 6 hours
+- Avoid `toDate()` or date functions on `reqTimeSec` in WHERE clauses; filter directly
+- Add LIMIT to exploratory queries
+
+**Chat gives wrong SQL**
+- Switch to the **Explorer** tab and run the SQL manually to see the raw error
+- Use the **Tips** tab for ClickHouse syntax reference and copy-ready examples
 
 ---
 
