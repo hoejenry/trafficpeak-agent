@@ -65,7 +65,7 @@ TrafficPeak is built on Grafana. There are two ways to get a token:
 
 ### Method 1 — Grafana Service Account (recommended)
 
-1. Log in to your TrafficPeak instance (e.g. `https://ord.trafficpeak.live`)
+1. Log in to your TrafficPeak instance (e.g. `https://<your-trafficpeak-url>`)
 2. Go to **Administration → Service accounts**
 3. Check whether a service account already exists for the customer. If not, create one:
    - **Name:** `<customername>_mcp_reader`
@@ -90,7 +90,7 @@ Create a file:
 ```json
 {
   "name": "customer-ord",
-  "url": "https://ord.trafficpeak.live",
+  "url": "https://<your-trafficpeak-url>",
   "token": "glsa_..."
 }
 ```
@@ -104,7 +104,7 @@ In the UI → **Manage Accounts** → fill in Account name, URL, and token.
 
 ```bash
 claude mcp add --transport http mcp-trafficpeak \
-  https://ord.trafficpeak.live/mcp \
+  https://<your-trafficpeak-url>/mcp \
   --header "Authorization: Bearer glsa_..."
 ```
 
@@ -166,7 +166,7 @@ Credentials saved via the UI are stored in `~/.akamai-agent-trafficpeak.json` (m
 
 **"No databases found" or empty schema**
 - Confirm the service account token has read access to the target customer's data
-- Verify the TrafficPeak URL is reachable: `curl -I https://ord.trafficpeak.live`
+- Verify the TrafficPeak URL is reachable: `curl -I https://<your-trafficpeak-url>`
 - Token may have expired — generate a new one in Grafana Service Accounts
 
 **Query times out**
