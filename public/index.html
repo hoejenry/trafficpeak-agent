@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TrafficPeak Analytics</title>
+<script>
+  // Applied before first paint to avoid a flash of the wrong theme.
+  document.documentElement.dataset.theme = localStorage.getItem('tpTheme') || 'light';
+</script>
 <style>
   :root {
     --bg: #0d1117;
@@ -21,6 +25,20 @@
     --radius: 8px;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --mono: 'SF Mono', 'Fira Code', Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --surface2: #eaeef2;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #59636e;
+    --accent: #0969da;
+    --accent2: #0969da;
+    --green: #1a7f37;
+    --yellow: #9a6700;
+    --red: #cf222e;
+    --teal: #1a7f37;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -240,6 +258,7 @@
       </svg>
       Manage Accounts
     </button>
+    <button class="manage-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme"></button>
   </div>
 </header>
 
@@ -568,6 +587,8 @@ let dbTables      = {};     // cache: db → [table, …]
 let chatHistory   = [];
 let isStreaming   = false;
 let activeChart   = null;
+let lastRows      = [];
+let lastCols      = [];
 
 function acctHeaders(extra = {}) {
   return { 'Content-Type': 'application/json', 'X-TP-Account': activeAccount, ...extra };
@@ -846,11 +867,16 @@ function showResultsView(view) {
   }
 }
 
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 function renderChart(rows, cols) {
   const toggle = document.getElementById('results-toggle');
   const panel  = document.getElementById('chart-panel');
 
   if (!rows.length || !cols.length) return;
+  lastRows = rows; lastCols = cols;
 
   const colIndex = c => cols.indexOf(c);
 
@@ -911,23 +937,23 @@ function renderChart(rows, cols) {
       maintainAspectRatio: false,
       animation: { duration: 300 },
       plugins: {
-        legend: { labels: { color: '#8b949e', font: { size: 12 }, boxWidth: 14 } },
+        legend: { labels: { color: cssVar('--muted'), font: { size: 12 }, boxWidth: 14 } },
         tooltip: {
-          backgroundColor: '#161b22',
-          borderColor: '#30363d',
+          backgroundColor: cssVar('--surface'),
+          borderColor: cssVar('--border'),
           borderWidth: 1,
-          titleColor: '#e6edf3',
-          bodyColor: '#8b949e',
+          titleColor: cssVar('--text'),
+          bodyColor: cssVar('--muted'),
         },
       },
       scales: {
         x: {
-          ticks: { color: '#8b949e', maxRotation: 45, font: { size: 11 }, maxTicksLimit: 20 },
-          grid: { color: '#21262d' },
+          ticks: { color: cssVar('--muted'), maxRotation: 45, font: { size: 11 }, maxTicksLimit: 20 },
+          grid: { color: cssVar('--surface2') },
         },
         y: {
-          ticks: { color: '#8b949e', font: { size: 11 } },
-          grid: { color: '#21262d' },
+          ticks: { color: cssVar('--muted'), font: { size: 11 } },
+          grid: { color: cssVar('--surface2') },
         },
       },
     },
@@ -1222,7 +1248,24 @@ function renderMd(text) {
   return out.join('<br>').replace(/\u0000CODE(\d+)\u0000/g, (_, idx) => `<pre>${codeBlocks[+idx]}</pre>`);
 }
 
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function updateThemeBtn() {
+  const light = document.documentElement.dataset.theme === 'light';
+  document.getElementById('theme-btn').innerHTML = light
+    ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> Light'
+    : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Dark';
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('tpTheme', next);
+  updateThemeBtn();
+  if (activeChart) renderChart(lastRows, lastCols); // re-draw with theme-correct colors
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+updateThemeBtn();
 refreshAccounts().then(() => loadDatabases());
 </script>
 </body>
