@@ -104,7 +104,7 @@
   .results-body { flex: 1; overflow: auto; }
   .results-body table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .results-body th { position: sticky; top: 0; background: var(--surface2); color: var(--muted); font-weight: 500; padding: 6px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; z-index: 1; }
-  .results-body td { padding: 6px 12px; border-bottom: 1px solid #21262d; white-space: nowrap; font-family: var(--mono); }
+  .results-body td { padding: 6px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; font-family: var(--mono); }
   .results-body tr:hover td { background: var(--surface2); }
   .howto { padding: 24px; color: var(--muted); font-size: 13px; }
   .howto h3 { font-size: 12px; font-weight: 600; color: var(--accent2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
@@ -1195,14 +1195,16 @@ function splitTableRow(row) {
   return row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
 }
 
-const NUMERIC_CELL_RE = /^[-+]?\$?\d{1,3}(,\d{3})*(\.\d+)?%?$/;
+const NUMERIC_CELL_RE = /^[-+]?\$?\d{1,3}(,\d{3})*(\.\d+)?\s*[a-zA-Z%]{0,4}$/;
 
-// Explicit :---:/---:/:--- wins; otherwise right-align columns that are numeric top to bottom.
+// Explicit :---:/---: (center/right) wins since those are deliberate choices.
+// A plain --- or :--- (left) doesn't block it — models emit ':---' under every
+// column out of habit, not as an instruction to left-align numbers — so those
+// still fall through to auto-detecting numeric columns for right-align.
 function colAlignment(sepCell, bodyRows, colIndex) {
   const sep = (sepCell || '').trim();
   if (/^:-+:$/.test(sep)) return 'center';
   if (/^-+:$/.test(sep)) return 'right';
-  if (/^:-+$/.test(sep)) return null;
   const vals = bodyRows.map(r => (r[colIndex] || '').trim()).filter(Boolean);
   return (vals.length && vals.every(v => NUMERIC_CELL_RE.test(v))) ? 'right' : null;
 }
