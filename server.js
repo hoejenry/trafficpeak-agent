@@ -222,9 +222,10 @@ app.get('/api/dashboard', async (req, res) => {
     return candidates.find(c => columns.some(col => col.toLowerCase() === c.toLowerCase())) || null;
   };
 
-  const ipCol  = findCol('cliIP', 'clientIP', 'client_ip', 'reqIp', 'remoteIP', 'ip', 'srcIP', 'xForwardedFor');
-  const uaCol  = findCol('UA', 'userAgent', 'ua', 'user_agent', 'reqUserAgent', 'reqUA', 'httpUserAgent');
-  const denCol = findCol('denied', 'deny', 'wafDenied', 'blocked');
+  const ipCol   = findCol('cliIP', 'clientIP', 'client_ip', 'reqIp', 'remoteIP', 'ip', 'srcIP', 'xForwardedFor');
+  const uaCol   = findCol('UA', 'userAgent', 'ua', 'user_agent', 'reqUserAgent', 'reqUA', 'httpUserAgent');
+  const denCol  = findCol('denied', 'deny', 'wafDenied', 'blocked');
+  const hostCol = findCol('reqHost', 'host', 'hostname', 'vhost', 'reqHostname', 'serverName');
   const hint   = columns.length ? `Available columns: ${columns.join(', ')}` : '';
 
   const hasDeny = !!denCol;
@@ -237,7 +238,7 @@ app.get('/api/dashboard', async (req, res) => {
 
   const BOT_FILTER = `(lower(${ua}) LIKE '%bot%' OR lower(${ua}) LIKE '%crawl%' OR lower(${ua}) LIKE '%spider%' OR lower(${ua}) LIKE '%slurp%' OR lower(${ua}) LIKE '%scan%')`;
 
-  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown] = await Promise.all([
+  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, topHostnames] = await Promise.all([
     safe(() => run(
       `SELECT toStartOfFiveMinutes(reqTimeSec) AS t, count() AS requests, round(sum(bytes)/1e9, 4) AS gb
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
@@ -260,6 +261,7 @@ app.get('/api/dashboard', async (req, res) => {
       ? safe(() => run(
           `SELECT ${uaCol} AS ua, count() AS requests
            FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${uaCol} != ''
+             AND ${BOT_FILTER}
            GROUP BY ua ORDER BY requests DESC LIMIT 10`
         ))
       : { error: `User-agent column not found. ${hint}` },
@@ -288,6 +290,13 @@ app.get('/api/dashboard', async (req, res) => {
               countIf(${AI_BOT_FILTER}) AS ai_bots
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR`
     )),
+    hostCol
+      ? safe(() => run(
+          `SELECT ${hostCol} AS hostname, count() AS requests, round(sum(bytes)/1e9, 4) AS gb
+           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${hostCol} != ''
+           GROUP BY hostname ORDER BY requests DESC LIMIT 10`
+        ))
+      : { error: `Hostname column not found. ${hint}` },
     safe(() => run(
       `SELECT multiIf(
          lower(${ua}) LIKE '%gptbot%',          'GPTBot (OpenAI)',
@@ -317,7 +326,7 @@ app.get('/api/dashboard', async (req, res) => {
     )),
   ]);
 
-  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, _schema: { columns, ipCol, uaCol, denCol } });
+  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, topHostnames, _schema: { columns, ipCol, uaCol, denCol, hostCol } });
 });
 
 app.listen(PORT, () => {
