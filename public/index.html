@@ -853,10 +853,16 @@ async function loadDatabases() {
 }
 
 function parsePrimitive(data) {
-  if (Array.isArray(data)) return data.map(d => (typeof d === 'string' ? d : String(d)));
-  if (Array.isArray(data.databases)) return data.databases.map(String);
-  if (Array.isArray(data.tables)) return data.tables.map(String);
-  if (data.text) { try { return JSON.parse(data.text).map(String); } catch { return [data.text]; } }
+  const toStr = d => {
+    if (d == null) return '';
+    if (typeof d === 'string') return d;
+    if (typeof d === 'object') return d.name || d.database || d.table || String(d);
+    return String(d);
+  };
+  if (Array.isArray(data)) return data.map(toStr);
+  if (Array.isArray(data.databases)) return data.databases.map(toStr);
+  if (Array.isArray(data.tables)) return data.tables.map(toStr);
+  if (data.text) { try { return JSON.parse(data.text).map(toStr); } catch { return [data.text]; } }
   return [];
 }
 
