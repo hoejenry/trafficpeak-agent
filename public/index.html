@@ -602,7 +602,13 @@ LIMIT 15</pre>
       <div class="dash-toolbar">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
         <span>Source:</span>
-        <span class="dash-source" id="dash-source">none selected</span>
+        <select class="tb-select" id="dash-db-sel" onchange="onDashDbChange(this.value)" style="max-width:160px">
+          <option value="">— database —</option>
+        </select>
+        <span style="color:var(--border)">.</span>
+        <select class="tb-select" id="dash-tbl-sel" onchange="onDashTblChange(this.value)" style="max-width:160px">
+          <option value="">— table —</option>
+        </select>
         <button class="dash-refresh-btn" id="dash-refresh-btn" onclick="loadDashboard()">↻ Refresh</button>
         <span id="dash-updated" style="font-size:11px;color:var(--muted)"></span>
         <span style="margin-left:auto;font-size:11px;color:var(--muted)">Last 6 hours · auto-refreshes every 5 min</span>
@@ -1277,25 +1283,58 @@ function renderMd(text) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 let dashCharts = {};
 let dashRefreshTimer = null;
+let dashDb = null;
+let dashTable = null;
 
-function initDashboard() {
-  const srcEl = document.getElementById('dash-source');
-  if (currentDb && currentTable) {
-    srcEl.textContent = `${currentDb}.${currentTable}`;
-    loadDashboard();
-  } else {
-    srcEl.textContent = 'none selected';
-    document.getElementById('dash-content').innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:14px;color:var(--muted);padding:60px 20px;text-align:center">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.35"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-        <div style="font-size:13px">Select a <strong style="color:var(--text)">database → table</strong> in the Explorer tab, then return here.</div>
-        <button class="run-btn" style="font-size:12px;padding:6px 14px" onclick="document.getElementById('tab-explorer').click()">Open Explorer</button>
-      </div>`;
+async function initDashboard() {
+  // Populate db dropdown
+  const dbSel = document.getElementById('dash-db-sel');
+  dbSel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const res  = await fetch('/api/databases', { headers: { 'X-TP-Account': activeAccount } });
+    const data = await res.json();
+    const dbs  = parsePrimitive(data);
+    if (!dbs.length) {
+      dbSel.innerHTML = '<option value="">— no databases —</option>';
+      return;
+    }
+    dbSel.innerHTML = dbs.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    // Pre-select from explorer state or first db
+    const pick = (currentDb && dbs.includes(currentDb)) ? currentDb : dbs[0];
+    dbSel.value = pick;
+    await onDashDbChange(pick, currentTable || null);
+  } catch (err) {
+    dbSel.innerHTML = '<option value="">— error —</option>';
   }
 }
 
+async function onDashDbChange(db, preselectTable = null) {
+  dashDb = db;
+  dashTable = null;
+  const tblSel = document.getElementById('dash-tbl-sel');
+  tblSel.innerHTML = '<option value="">Loading…</option>';
+  if (!db) return;
+  try {
+    const res   = await fetch(`/api/tables?database=${encodeURIComponent(db)}`, { headers: { 'X-TP-Account': activeAccount } });
+    const data  = await res.json();
+    const tbls  = parsePrimitive(data);
+    if (!tbls.length) { tblSel.innerHTML = '<option value="">— no tables —</option>'; return; }
+    tblSel.innerHTML = tbls.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    const pick = (preselectTable && tbls.includes(preselectTable)) ? preselectTable : tbls[0];
+    tblSel.value = pick;
+    onDashTblChange(pick);
+  } catch {
+    tblSel.innerHTML = '<option value="">— error —</option>';
+  }
+}
+
+function onDashTblChange(table) {
+  dashTable = table;
+  if (dashDb && dashTable) loadDashboard();
+}
+
 async function loadDashboard() {
-  if (!currentDb || !currentTable) { initDashboard(); return; }
+  if (!dashDb || !dashTable) { initDashboard(); return; }
 
   clearTimeout(dashRefreshTimer);
   const btn = document.getElementById('dash-refresh-btn');
@@ -1310,7 +1349,7 @@ async function loadDashboard() {
 
   try {
     const res = await fetch(
-      `/api/dashboard?database=${encodeURIComponent(currentDb)}&table=${encodeURIComponent(currentTable)}`,
+      `/api/dashboard?database=${encodeURIComponent(dashDb)}&table=${encodeURIComponent(dashTable)}`,
       { headers: acctHeaders() }
     );
     const data = await res.json();
@@ -1324,11 +1363,11 @@ async function loadDashboard() {
     renderDashCache(data.cacheStats);
 
     const upEl = document.getElementById('dash-updated');
-    if (upEl) upEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    if (upEl) upEl.textContent = `· updated ${new Date().toLocaleTimeString()}`;
   } catch (err) {
     ['cdn','security','topips','topbots','waf','cache'].forEach(id => {
       const el = document.getElementById(`dash-${id}`);
-      if (el) el.innerHTML = `<div class="dash-err">Error: ${esc(err.message)}</div>`;
+      if (el) el.innerHTML = `<div class="dash-err">${esc(err.message)}</div>`;
     });
   } finally {
     if (btn) btn.disabled = false;
@@ -1513,6 +1552,9 @@ function renderDashCache(result) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 refreshAccounts().then(() => { loadDatabases(); initDashboard(); });
+// Re-init dashboard when account changes so dropdowns reload
+const _origSetAccount = setAccount;
+setAccount = function(name) { _origSetAccount(name); if (document.getElementById('view-dashboard').classList.contains('active')) initDashboard(); };
 </script>
 </body>
 </html>
