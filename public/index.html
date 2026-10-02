@@ -730,17 +730,6 @@ LIMIT 15</pre>
           </div>
         </div>
 
-        <!-- Hostnames row -->
-        <div class="dash-row-charts">
-          <div class="dash-card">
-            <div class="dash-card-hd">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-              Top Hostnames
-              <span class="hd-sub">— by request volume, last 6h</span>
-            </div>
-            <div class="dash-panel-body" id="dash-tophosts"><div class="dash-spin">Loading…</div></div>
-          </div>
-        </div>
 
         <!-- AI Bot Breakdown row -->
         <div class="dash-row-aibot">
@@ -1460,7 +1449,6 @@ async function loadDashboard() {
     renderDashTopBots(data.topUserAgents);
     renderDashWaf(data.topWafRules);
     renderDashCache(data.cacheStats);
-    renderDashTopHosts(data.topHostnames);
     renderDashAiBot(data.aiBotBreakdown);
 
     const upEl = document.getElementById('dash-updated');
@@ -1537,13 +1525,18 @@ function renderDashCdn(result) {
   if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No data for this period</div>'; return; }
   const { rows, cols } = d;
   el.innerHTML = '<canvas></canvas>';
+  const hasBotCols = cols.includes('bot_requests');
   dashCharts.cdn = new Chart(el.querySelector('canvas').getContext('2d'), {
     type: 'line',
     data: {
       labels: dashTime(rows, cols, 't'),
       datasets: [
-        { label: 'Requests', data: rows.map(r => dashGet(r, cols, 'requests')), borderColor: '#009bde', backgroundColor: '#009bde22', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2, yAxisID: 'y' },
-        { label: 'GB Served', data: rows.map(r => dashGet(r, cols, 'gb')),       borderColor: '#3fb950', backgroundColor: 'transparent', tension: 0.3, borderWidth: 1.5, borderDash: [4,2], pointRadius: 0, yAxisID: 'y2' },
+        { label: 'Requests',    data: rows.map(r => dashGet(r, cols, 'requests')),      borderColor: '#009bde', backgroundColor: '#009bde22', fill: true,  tension: 0.3, borderWidth: 2,   pointRadius: rows.length > 60 ? 0 : 2, yAxisID: 'y' },
+        { label: 'GB Served',   data: rows.map(r => dashGet(r, cols, 'gb')),            borderColor: '#3fb950', backgroundColor: 'transparent',             tension: 0.3, borderWidth: 1.5, borderDash: [4,2], pointRadius: 0, yAxisID: 'y2' },
+        ...(hasBotCols ? [
+          { label: 'Bots',      data: rows.map(r => dashGet(r, cols, 'bot_requests')),    borderColor: '#a371f7', backgroundColor: '#a371f722', fill: true,  tension: 0.3, borderWidth: 2,   pointRadius: rows.length > 60 ? 0 : 2, yAxisID: 'y' },
+          { label: 'AI Bots',   data: rows.map(r => dashGet(r, cols, 'ai_bot_requests')), borderColor: '#3fb950', backgroundColor: '#3fb95022', fill: false, tension: 0.3, borderWidth: 2,   pointRadius: rows.length > 60 ? 0 : 2, yAxisID: 'y' },
+        ] : []),
       ],
     },
     options: baseChartOpts(true),
@@ -1602,21 +1595,6 @@ function renderDashTopBots(result) {
   }</tbody></table>`;
 }
 
-function renderDashTopHosts(result) {
-  const el = document.getElementById('dash-tophosts');
-  if (!el) return;
-  if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}</div>`; return; }
-  const d = dashRows(result);
-  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No data</div>'; return; }
-  const { rows, cols } = d;
-  el.innerHTML = `<table class="dtbl"><thead><tr><th>Hostname</th><th>Requests</th><th>GB</th></tr></thead><tbody>${
-    rows.map(r => {
-      const h  = String(dashGet(r, cols, 'hostname') || '');
-      const gb = dashGet(r, cols, 'gb') || 0;
-      return `<tr><td class="td-trunc" title="${esc(h)}">${esc(h)}</td><td>${fmt(dashGet(r,cols,'requests'))}</td><td style="color:var(--muted)">${gb}</td></tr>`;
-    }).join('')
-  }</tbody></table>`;
-}
 
 function renderDashWaf(result) {
   const el = document.getElementById('dash-waf');
@@ -1714,33 +1692,44 @@ function renderDashAiBot(result) {
     bars.innerHTML = msg; tbl.innerHTML = msg; return;
   }
   const { rows, cols } = d;
-  const maxReqs = Math.max(...rows.map(r => +(dashGet(r, cols, 'requests') || 0)));
+
+  // Aggregate by bot_type for bar chart (rows may now have hostname dimension)
+  const byBot = {};
+  rows.forEach(r => {
+    const name = String(dashGet(r, cols, 'bot_type') || '?');
+    if (!byBot[name]) byBot[name] = { name, reqs: 0, ips: 0, idx: Object.keys(byBot).length };
+    byBot[name].reqs += +(dashGet(r, cols, 'requests') || 0);
+    byBot[name].ips  += +(dashGet(r, cols, 'unique_ips') || 0);
+  });
+  const botList  = Object.values(byBot).sort((a, b) => b.reqs - a.reqs);
+  const maxReqs  = Math.max(...botList.map(b => b.reqs));
 
   // Bar chart panel
-  bars.innerHTML = rows.map((r, i) => {
-    const name = String(dashGet(r, cols, 'bot_type') || '?');
-    const reqs = +(dashGet(r, cols, 'requests') || 0);
-    const pct  = maxReqs > 0 ? (reqs / maxReqs * 100).toFixed(1) : 0;
+  bars.innerHTML = botList.map((b, i) => {
+    const pct   = maxReqs > 0 ? (b.reqs / maxReqs * 100).toFixed(1) : 0;
     const color = AI_BOT_COLORS[i % AI_BOT_COLORS.length];
     return `<div class="aibot-bar-row">
-      <div class="aibot-bar-name" title="${esc(name)}">${esc(name)}</div>
+      <div class="aibot-bar-name" title="${esc(b.name)}">${esc(b.name)}</div>
       <div class="aibot-bar-track"><div class="aibot-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-      <div class="aibot-bar-count">${fmt(reqs)}</div>
+      <div class="aibot-bar-count">${fmt(b.reqs)}</div>
     </div>`;
   }).join('');
 
-  // Detail table panel
+  // Detail table panel — shows hostname + bot type
+  const total = rows.reduce((s, r) => s + +(dashGet(r, cols, 'requests') || 0), 0);
+  const hasHost = cols.includes('hostname');
   tbl.innerHTML = `<table class="dtbl">
-    <thead><tr><th>Bot</th><th>Requests</th><th>Unique IPs</th><th>Share</th></tr></thead>
-    <tbody>${rows.map((r, i) => {
+    <thead><tr><th>Bot</th>${hasHost ? '<th>Hostname</th>' : ''}<th>Requests</th><th>Unique IPs</th><th>Share</th></tr></thead>
+    <tbody>${rows.map(r => {
       const name  = String(dashGet(r, cols, 'bot_type') || '?');
+      const host  = String(dashGet(r, cols, 'hostname') || '—');
       const reqs  = +(dashGet(r, cols, 'requests') || 0);
       const ips   = dashGet(r, cols, 'unique_ips');
-      const total = rows.reduce((s, x) => s + +(dashGet(x, cols, 'requests') || 0), 0);
       const share = total > 0 ? (reqs / total * 100).toFixed(1) : 0;
-      const color = AI_BOT_COLORS[i % AI_BOT_COLORS.length];
+      const color = AI_BOT_COLORS[botList.findIndex(b => b.name === name) % AI_BOT_COLORS.length];
       return `<tr>
         <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px;vertical-align:middle"></span>${esc(name)}</td>
+        ${hasHost ? `<td class="td-trunc" title="${esc(host)}">${esc(host)}</td>` : ''}
         <td>${fmt(reqs)}</td>
         <td>${fmt(ips)}</td>
         <td style="color:var(--muted)">${share}%</td>
