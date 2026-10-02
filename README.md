@@ -7,31 +7,32 @@ A standalone analytics UI and Claude-powered chat assistant for [Akamai TrafficP
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                 Browser (port 3001)                      │
-│  ┌───────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ Explorer  │  │     Chat     │  │      Tips        │  │
-│  │ SQL query │  │ Claude-AI    │  │ Query reference  │  │
-│  │ + charts  │  │ NL → SQL     │  │ + cheat sheet   │  │
-│  └─────┬─────┘  └──────┬───────┘  └──────────────────┘  │
-└────────┼───────────────┼──────────────────────────────── ┘
-         │               │
-      server.js (Express)
-         │               │
-    TrafficPeak       Anthropic API
-    ClickHouse API    (Claude chat)
+┌──────────────────────────────────────────────────────────────────┐
+│                      Browser (port 3001)                          │
+│  ┌───────────┐ ┌──────────┐ ┌──────────────┐ ┌───────────────┐  │
+│  │ Dashboard │ │ Explorer │ │     Chat     │ │     Tips      │  │
+│  │ live tiles│ │ SQL query│ │ Claude-AI    │ │ Query ref     │  │
+│  │ + charts  │ │ + charts │ │ NL → SQL     │ │ + cheat sheet │  │
+│  └─────┬─────┘ └────┬─────┘ └──────┬───────┘ └───────────────┘  │
+└────────┼────────────┼──────────────┼──────────────────────────── ┘
+         │            │              │
+              server.js (Express)
+         │            │              │
+    TrafficPeak                 Anthropic API
+    ClickHouse API              (Claude chat — optional)
          │
   src/tools/trafficpeak.js
   (tp_list_databases, tp_list_tables,
-   tp_get_schema, tp_query)
+   tp_get_table_info, tp_run_select_query)
 ```
 
 ---
 
 ## Features
 
+- **Dashboard** — live 6-hour view with auto-refresh: 4 summary tiles (Edge Hits, WAF Blocks, Bot Detections, AI Bots), CDN traffic and security event charts, top IPs, top user agents, WAF rules, cache efficiency, and a full AI bot breakdown panel covering 17 known LLM crawlers
 - **Explorer** — database and table browser, SQL query runner with auto-generated bar/line charts
-- **Chat** — Claude-powered assistant that discovers schema and writes ClickHouse SQL from natural language
+- **Chat** — Claude-powered assistant that discovers schema and writes ClickHouse SQL from natural language *(requires Anthropic API key)*
 - **Tips** — query reference, ClickHouse cheat sheet, and copy-ready example queries
 - **Multi-account** — manage multiple TrafficPeak instances via a credential manager; supports JSON key file upload
 - **Claude CLI integration** — any account registered via `claude mcp add` is automatically available in the UI (no duplicate entry)
@@ -41,8 +42,8 @@ A standalone analytics UI and Claude-powered chat assistant for [Akamai TrafficP
 ## Prerequisites
 
 - Node.js 18+
-- Anthropic API key (for chat)
 - A TrafficPeak service account token — see [Getting a token](#getting-a-trafficpeak-token)
+- Anthropic API key — **optional**, only needed for the Chat tab
 
 ---
 
@@ -184,13 +185,13 @@ Credentials saved via the UI are stored in `~/.akamai-agent-trafficpeak.json` (m
 
 ```
 trafficpeak-agent/
-├── server.js              # Express server — API routes + Claude chat
+├── server.js              # Express server — API routes, dashboard, Claude chat
 ├── src/
 │   ├── auth.js            # Credential management (GUI + Claude CLI)
 │   └── tools/
 │       └── trafficpeak.js # TrafficPeak MCP client (list, schema, query)
 ├── public/
-│   └── index.html         # Single-page UI (Explorer + Chat + Tips)
+│   └── index.html         # Single-page UI (Dashboard + Explorer + Chat + Tips)
 └── package.json
 ```
 
