@@ -227,6 +227,32 @@
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
   @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
 
+  /* ── Summary tiles ── */
+  .dash-row-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .stat-tile-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .stat-tile-lbl svg { opacity: .7; flex-shrink: 0; }
+  .stat-tile-val { font-size: 30px; font-weight: 800; font-family: var(--mono); line-height: 1; color: var(--text); }
+  .stat-tile-sub { font-size: 11px; color: var(--muted); }
+  .tile-blue   .stat-tile-val { color: var(--accent); }
+  .tile-red    .stat-tile-val { color: var(--red); }
+  .tile-yellow .stat-tile-val { color: var(--yellow); }
+  .tile-purple .stat-tile-val { color: #a371f7; }
+  .tile-blue   { border-color: #009bde33; }
+  .tile-red    { border-color: #f8514933; }
+  .tile-yellow { border-color: #d2992233; }
+  .tile-purple { border-color: #a371f733; }
+
+  /* ── AI Bot panel ── */
+  .dash-row-aibot { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .aibot-bar-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid #1c2128; }
+  .aibot-bar-row:last-child { border-bottom: none; }
+  .aibot-bar-name { font-size: 11px; color: var(--text); width: 180px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .aibot-bar-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+  .aibot-bar-fill  { height: 100%; border-radius: 2px; background: #a371f7; }
+  .aibot-bar-count { font-size: 11px; font-family: var(--mono); color: var(--muted); width: 50px; text-align: right; }
+  .aibot-bar-ips   { font-size: 10px; color: var(--muted); width: 60px; text-align: right; }
+
   /* ── Dashboard ── */
   .dash-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .dash-toolbar { padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
@@ -639,6 +665,42 @@ LIMIT 15</pre>
 
       <div class="dash-content" id="dash-content">
 
+        <!-- Summary tiles -->
+        <div class="dash-row-summary">
+          <div class="stat-tile tile-blue">
+            <div class="stat-tile-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Edge Hits
+            </div>
+            <div class="stat-tile-val" id="tile-edge-hits">—</div>
+            <div class="stat-tile-sub">last 6 hours</div>
+          </div>
+          <div class="stat-tile tile-red">
+            <div class="stat-tile-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              WAF Blocks
+            </div>
+            <div class="stat-tile-val" id="tile-waf-blocks">—</div>
+            <div class="stat-tile-sub">last 6 hours</div>
+          </div>
+          <div class="stat-tile tile-yellow">
+            <div class="stat-tile-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Bot Detections
+            </div>
+            <div class="stat-tile-val" id="tile-bot-detections">—</div>
+            <div class="stat-tile-sub">last 6 hours</div>
+          </div>
+          <div class="stat-tile tile-purple">
+            <div class="stat-tile-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+              AI Bots
+            </div>
+            <div class="stat-tile-val" id="tile-ai-bots">—</div>
+            <div class="stat-tile-sub">last 6 hours</div>
+          </div>
+        </div>
+
         <!-- Charts row -->
         <div class="dash-row-charts">
           <div class="dash-card">
@@ -678,7 +740,7 @@ LIMIT 15</pre>
           <div class="dash-card">
             <div class="dash-card-hd">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              WAF / Top Error Paths
+              WAF Rules
             </div>
             <div class="dash-panel-body" id="dash-waf"><div class="dash-spin">Loading…</div></div>
           </div>
@@ -688,6 +750,26 @@ LIMIT 15</pre>
               Cache Efficiency
             </div>
             <div class="dash-panel-body" id="dash-cache"><div class="dash-spin">Loading…</div></div>
+          </div>
+        </div>
+
+        <!-- AI Bot Breakdown row -->
+        <div class="dash-row-aibot">
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#a371f7"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+              AI Bot Breakdown
+              <span class="hd-sub">— by crawler type, last 6h</span>
+            </div>
+            <div class="dash-panel-body" id="dash-aibot-bars"><div class="dash-spin">Loading…</div></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#a371f7"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+              AI Bot Detail
+              <span class="hd-sub">— requests &amp; unique IPs</span>
+            </div>
+            <div class="dash-panel-body" id="dash-aibot-tbl"><div class="dash-spin">Loading…</div></div>
           </div>
         </div>
 
@@ -1446,9 +1528,13 @@ async function loadDashboard() {
   const btn = document.getElementById('dash-refresh-btn');
   if (btn) btn.disabled = true;
 
-  ['cdn','security','topips','topbots','waf','cache'].forEach(id => {
+  ['cdn','security','topips','topbots','waf','cache','aibot-bars','aibot-tbl'].forEach(id => {
     const el = document.getElementById(`dash-${id}`);
     if (el) el.innerHTML = '<div class="dash-spin">Loading…</div>';
+  });
+  ['tile-edge-hits','tile-waf-blocks','tile-bot-detections','tile-ai-bots'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '…';
   });
   Object.values(dashCharts).forEach(c => { try { c.destroy(); } catch {} });
   dashCharts = {};
@@ -1461,12 +1547,14 @@ async function loadDashboard() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
+    renderDashSummary(data.summary);
     renderDashCdn(data.cdnTraffic);
     renderDashSecurity(data.securityEvents);
     renderDashTopIPs(data.topIPs);
     renderDashTopBots(data.topUserAgents);
-    renderDashWaf(data.topErrorPaths);
+    renderDashWaf(data.topWafRules);
     renderDashCache(data.cacheStats);
+    renderDashAiBot(data.aiBotBreakdown);
 
     const upEl = document.getElementById('dash-updated');
     if (upEl) upEl.textContent = `· updated ${new Date().toLocaleTimeString()}`;
@@ -1562,16 +1650,16 @@ function renderDashSecurity(result) {
   const d = dashRows(result);
   if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No security events in this period</div>'; return; }
   const { rows, cols } = d;
+  const hasWaf = cols.includes('waf_denied');
   el.innerHTML = '<canvas></canvas>';
+  const datasets = [
+    { label: '4xx Errors', data: rows.map(r => dashGet(r, cols, 'err4xx')), borderColor: '#d29922', backgroundColor: '#d2992222', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
+    { label: '5xx Errors', data: rows.map(r => dashGet(r, cols, 'err5xx')), borderColor: '#f85149', backgroundColor: '#f8514933', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
+  ];
+  if (hasWaf) datasets.push({ label: 'WAF Denied', data: rows.map(r => dashGet(r, cols, 'waf_denied')), borderColor: '#a371f7', backgroundColor: '#a371f733', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 });
   dashCharts.security = new Chart(el.querySelector('canvas').getContext('2d'), {
     type: 'line',
-    data: {
-      labels: dashTime(rows, cols, 't'),
-      datasets: [
-        { label: '4xx Errors', data: rows.map(r => dashGet(r, cols, 'err4xx')), borderColor: '#d29922', backgroundColor: '#d2992222', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
-        { label: '5xx Errors', data: rows.map(r => dashGet(r, cols, 'err5xx')), borderColor: '#f85149', backgroundColor: '#f8514933', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
-      ],
-    },
+    data: { labels: dashTime(rows, cols, 't'), datasets },
     options: baseChartOpts(false),
   });
 }
@@ -1612,15 +1700,30 @@ function renderDashWaf(result) {
   if (!el) return;
   if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}</div>`; return; }
   const d = dashRows(result);
-  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No errors in this period</div>'; return; }
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No WAF blocks in this period</div>'; return; }
   const { rows, cols } = d;
-  el.innerHTML = `<table class="dtbl"><thead><tr><th>Path</th><th>Errors</th><th>Err%</th></tr></thead><tbody>${
-    rows.map(r => {
-      const path = String(dashGet(r, cols, 'path') || '');
-      const short = path.length > 28 ? path.slice(0, 28) + '…' : path;
-      return `<tr><td class="td-trunc" title="${esc(path)}">${esc(short)}</td><td style="color:var(--red)">${fmt(dashGet(r,cols,'errors'))}</td><td style="color:var(--yellow)">${dashGet(r,cols,'error_pct')}%</td></tr>`;
-    }).join('')
-  }</tbody></table>`;
+  const isWaf = cols.includes('rule') || cols.includes('grp');
+  if (isWaf) {
+    el.innerHTML = `<table class="dtbl"><thead><tr><th>Rule</th><th>Group</th><th>Blocked</th><th>Uniq IPs</th></tr></thead><tbody>${
+      rows.map(r => {
+        const rule = String(dashGet(r, cols, 'rule') || '—');
+        const grp  = String(dashGet(r, cols, 'grp')  || '—');
+        return `<tr>
+          <td class="td-trunc" title="${esc(rule)}">${esc(rule.length > 18 ? rule.slice(0,18)+'…' : rule)}</td>
+          <td class="td-trunc" title="${esc(grp)}">${esc(grp.length > 14 ? grp.slice(0,14)+'…' : grp)}</td>
+          <td style="color:var(--red)">${fmt(dashGet(r,cols,'blocked'))}</td>
+          <td>${fmt(dashGet(r,cols,'unique_ips'))}</td>
+        </tr>`;
+      }).join('')
+    }</tbody></table>`;
+  } else {
+    el.innerHTML = `<table class="dtbl"><thead><tr><th>Path</th><th>Errors</th><th>Err%</th></tr></thead><tbody>${
+      rows.map(r => {
+        const path = String(dashGet(r, cols, 'path') || '');
+        return `<tr><td class="td-trunc" title="${esc(path)}">${esc(path.length > 28 ? path.slice(0,28)+'…' : path)}</td><td style="color:var(--red)">${fmt(dashGet(r,cols,'errors'))}</td><td style="color:var(--yellow)">${dashGet(r,cols,'error_pct')}%</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+  }
 }
 
 function renderDashCache(result) {
@@ -1654,6 +1757,72 @@ function renderDashCache(result) {
         <span class="cache-bar-num">${fmt(misses)}</span>
       </div>
     </div>`;
+}
+
+function renderDashSummary(result) {
+  if (!result || result.error) return;
+  const d = dashRows(result);
+  if (!d || !d.rows.length) return;
+  const { rows, cols } = d;
+  const r = rows[0];
+  const set = (id, col) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = fmt(dashGet(r, cols, col));
+  };
+  set('tile-edge-hits',      'edge_hits');
+  set('tile-waf-blocks',     'waf_blocks');
+  set('tile-bot-detections', 'bot_detections');
+  set('tile-ai-bots',        'ai_bots');
+}
+
+const AI_BOT_COLORS = ['#a371f7','#58a6ff','#3fb950','#d29922','#f85149','#009bde','#39d353','#ffa657','#ff7b72','#79c0ff','#56d364','#e3b341','#f78166','#b392f0'];
+
+function renderDashAiBot(result) {
+  const bars = document.getElementById('dash-aibot-bars');
+  const tbl  = document.getElementById('dash-aibot-tbl');
+  if (!bars || !tbl) return;
+  if (!result || result.error) {
+    const msg = `<div class="dash-err">${esc((result?.error) || 'No data')}</div>`;
+    bars.innerHTML = msg; tbl.innerHTML = msg; return;
+  }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) {
+    const msg = '<div class="dash-empty">No AI bot traffic in this period</div>';
+    bars.innerHTML = msg; tbl.innerHTML = msg; return;
+  }
+  const { rows, cols } = d;
+  const maxReqs = Math.max(...rows.map(r => +(dashGet(r, cols, 'requests') || 0)));
+
+  // Bar chart panel
+  bars.innerHTML = rows.map((r, i) => {
+    const name = String(dashGet(r, cols, 'bot_type') || '?');
+    const reqs = +(dashGet(r, cols, 'requests') || 0);
+    const pct  = maxReqs > 0 ? (reqs / maxReqs * 100).toFixed(1) : 0;
+    const color = AI_BOT_COLORS[i % AI_BOT_COLORS.length];
+    return `<div class="aibot-bar-row">
+      <div class="aibot-bar-name" title="${esc(name)}">${esc(name)}</div>
+      <div class="aibot-bar-track"><div class="aibot-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="aibot-bar-count">${fmt(reqs)}</div>
+    </div>`;
+  }).join('');
+
+  // Detail table panel
+  tbl.innerHTML = `<table class="dtbl">
+    <thead><tr><th>Bot</th><th>Requests</th><th>Unique IPs</th><th>Share</th></tr></thead>
+    <tbody>${rows.map((r, i) => {
+      const name  = String(dashGet(r, cols, 'bot_type') || '?');
+      const reqs  = +(dashGet(r, cols, 'requests') || 0);
+      const ips   = dashGet(r, cols, 'unique_ips');
+      const total = rows.reduce((s, x) => s + +(dashGet(x, cols, 'requests') || 0), 0);
+      const share = total > 0 ? (reqs / total * 100).toFixed(1) : 0;
+      const color = AI_BOT_COLORS[i % AI_BOT_COLORS.length];
+      return `<tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px;vertical-align:middle"></span>${esc(name)}</td>
+        <td>${fmt(reqs)}</td>
+        <td>${fmt(ips)}</td>
+        <td style="color:var(--muted)">${share}%</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
