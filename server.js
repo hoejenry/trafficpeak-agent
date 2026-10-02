@@ -198,9 +198,33 @@ app.get('/api/dashboard', async (req, res) => {
   const { database, table } = req.query;
   if (!database || !table) return res.status(400).json({ error: 'database and table required.' });
 
-  const fqt = `${database}.${table}`;
-  const run = sql => toolMap['tp_run_select_query'].handler({ query: sql, _tp_account: tpAccount });
+  const fqt  = `${database}.${table}`;
+  const run  = sql => toolMap['tp_run_select_query'].handler({ query: sql, _tp_account: tpAccount });
   const safe = async fn => { try { return await fn(); } catch (e) { return { error: e.message }; } };
+
+  // Discover schema so we can pick the right column names
+  let columns = [];
+  try {
+    const info = await toolMap['tp_get_table_info'].handler({ database, table, _tp_account: tpAccount });
+    const extract = c => {
+      if (!c) return null;
+      if (typeof c === 'string') return c.split(/[|\s]/)[0].trim();
+      if (typeof c === 'object') return c.name || c.column || c.field || null;
+      return String(c);
+    };
+    if (Array.isArray(info?.columns))      columns = info.columns.map(extract).filter(Boolean);
+    else if (Array.isArray(info?.rows))    columns = info.rows.map(r => extract(Array.isArray(r) ? r[0] : r)).filter(Boolean);
+    else if (info?.text) { try { const p = JSON.parse(info.text); if (Array.isArray(p)) columns = p.map(extract).filter(Boolean); } catch {} }
+  } catch {}
+
+  const findCol = (...candidates) => {
+    if (!columns.length) return candidates[0]; // no schema — try first candidate anyway
+    return candidates.find(c => columns.some(col => col.toLowerCase() === c.toLowerCase())) || null;
+  };
+
+  const ipCol = findCol('clientIP', 'cliIP', 'client_ip', 'reqIp', 'remoteIP', 'ip', 'srcIP', 'sourceIP');
+  const uaCol = findCol('userAgent', 'ua', 'user_agent', 'reqUserAgent', 'reqUA', 'httpUserAgent');
+  const hint  = columns.length ? `Available columns: ${columns.join(', ')}` : '';
 
   const [cdnTraffic, securityEvents, topIPs, topUserAgents, topErrorPaths, cacheStats] = await Promise.all([
     safe(() => run(
@@ -213,16 +237,20 @@ app.get('/api/dashboard', async (req, res) => {
               countIf(statusCode >= 500) AS err5xx
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
     )),
-    safe(() => run(
-      `SELECT clientIP AS ip, count() AS requests, countIf(statusCode >= 400) AS errors
-       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
-       GROUP BY ip ORDER BY requests DESC LIMIT 10`
-    )),
-    safe(() => run(
-      `SELECT userAgent AS ua, count() AS requests
-       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
-       GROUP BY ua ORDER BY requests DESC LIMIT 10`
-    )),
+    ipCol
+      ? safe(() => run(
+          `SELECT ${ipCol} AS ip, count() AS requests, countIf(statusCode >= 400) AS errors
+           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+           GROUP BY ip ORDER BY requests DESC LIMIT 10`
+        ))
+      : { error: `IP column not found (tried: clientIP, cliIP, client_ip, reqIp, remoteIP, ip). ${hint}` },
+    uaCol
+      ? safe(() => run(
+          `SELECT ${uaCol} AS ua, count() AS requests
+           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+           GROUP BY ua ORDER BY requests DESC LIMIT 10`
+        ))
+      : { error: `User-agent column not found (tried: userAgent, ua, user_agent, reqUserAgent, reqUA). ${hint}` },
     safe(() => run(
       `SELECT reqPath AS path, count() AS total,
               countIf(statusCode >= 400) AS errors,
@@ -238,7 +266,7 @@ app.get('/api/dashboard', async (req, res) => {
     )),
   ]);
 
-  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topErrorPaths, cacheStats });
+  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topErrorPaths, cacheStats, _schema: { columns, ipCol, uaCol } });
 });
 
 app.listen(PORT, () => {
