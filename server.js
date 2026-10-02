@@ -229,7 +229,15 @@ app.get('/api/dashboard', async (req, res) => {
 
   const hasDeny = !!denCol;
 
-  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats] = await Promise.all([
+  const ua = uaCol || 'UA';
+  const ip = ipCol || 'cliIP';
+  const dn = denCol || 'denied';
+
+  const AI_BOT_FILTER = `(lower(${ua}) LIKE '%gptbot%' OR lower(${ua}) LIKE '%claudebot%' OR lower(${ua}) LIKE '%anthropic-ai%' OR lower(${ua}) LIKE '%google-extended%' OR lower(${ua}) LIKE '%perplexitybot%' OR lower(${ua}) LIKE '%bytespider%' OR lower(${ua}) LIKE '%ccbot%' OR lower(${ua}) LIKE '%facebookbot%' OR lower(${ua}) LIKE '%applebot%' OR lower(${ua}) LIKE '%amazonbot%' OR lower(${ua}) LIKE '%bingbot%' OR lower(${ua}) LIKE '%yandexbot%' OR lower(${ua}) LIKE '%semrushbot%' OR lower(${ua}) LIKE '%ahrefsbot%' OR lower(${ua}) LIKE '%diffbot%' OR lower(${ua}) LIKE '%cohere-ai%' OR lower(${ua}) LIKE '%meta-externalagent%')`;
+
+  const BOT_FILTER = `(lower(${ua}) LIKE '%bot%' OR lower(${ua}) LIKE '%crawl%' OR lower(${ua}) LIKE '%spider%' OR lower(${ua}) LIKE '%slurp%' OR lower(${ua}) LIKE '%scan%')`;
+
+  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown] = await Promise.all([
     safe(() => run(
       `SELECT toStartOfFiveMinutes(reqTimeSec) AS t, count() AS requests, round(sum(bytes)/1e9, 4) AS gb
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
@@ -273,9 +281,43 @@ app.get('/api/dashboard', async (req, res) => {
               round(sum(bytes) / 1e9, 2) AS total_gb
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR`
     )),
+    safe(() => run(
+      `SELECT count() AS edge_hits,
+              countIf(${dn} = 1) AS waf_blocks,
+              countIf(${BOT_FILTER}) AS bot_detections,
+              countIf(${AI_BOT_FILTER}) AS ai_bots
+       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR`
+    )),
+    safe(() => run(
+      `SELECT multiIf(
+         lower(${ua}) LIKE '%gptbot%',          'GPTBot (OpenAI)',
+         lower(${ua}) LIKE '%claudebot%',        'ClaudeBot (Anthropic)',
+         lower(${ua}) LIKE '%anthropic-ai%',     'Anthropic AI',
+         lower(${ua}) LIKE '%google-extended%',  'Google-Extended (Gemini)',
+         lower(${ua}) LIKE '%perplexitybot%',    'PerplexityBot',
+         lower(${ua}) LIKE '%bytespider%',       'Bytespider (ByteDance)',
+         lower(${ua}) LIKE '%ccbot%',            'CCBot (Common Crawl)',
+         lower(${ua}) LIKE '%facebookbot%',      'FacebookBot (Meta)',
+         lower(${ua}) LIKE '%meta-externalagent%', 'Meta-ExternalAgent',
+         lower(${ua}) LIKE '%applebot%',         'Applebot (Apple)',
+         lower(${ua}) LIKE '%amazonbot%',        'AmazonBot',
+         lower(${ua}) LIKE '%bingbot%',          'Bingbot (Microsoft)',
+         lower(${ua}) LIKE '%yandexbot%',        'YandexBot',
+         lower(${ua}) LIKE '%semrushbot%',       'SemrushBot',
+         lower(${ua}) LIKE '%ahrefsbot%',        'AhrefsBot',
+         lower(${ua}) LIKE '%diffbot%',          'Diffbot',
+         lower(${ua}) LIKE '%cohere-ai%',        'Cohere AI',
+         'Other AI/LLM'
+       ) AS bot_type,
+       count() AS requests,
+       uniq(${ip}) AS unique_ips
+       FROM ${fqt}
+       WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${AI_BOT_FILTER}
+       GROUP BY bot_type ORDER BY requests DESC`
+    )),
   ]);
 
-  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, _schema: { columns, ipCol, uaCol, denCol } });
+  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, _schema: { columns, ipCol, uaCol, denCol } });
 });
 
 app.listen(PORT, () => {
