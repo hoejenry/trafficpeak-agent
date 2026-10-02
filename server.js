@@ -222,11 +222,14 @@ app.get('/api/dashboard', async (req, res) => {
     return candidates.find(c => columns.some(col => col.toLowerCase() === c.toLowerCase())) || null;
   };
 
-  const ipCol = findCol('clientIP', 'cliIP', 'client_ip', 'reqIp', 'remoteIP', 'ip', 'srcIP', 'sourceIP');
-  const uaCol = findCol('userAgent', 'ua', 'user_agent', 'reqUserAgent', 'reqUA', 'httpUserAgent');
-  const hint  = columns.length ? `Available columns: ${columns.join(', ')}` : '';
+  const ipCol  = findCol('cliIP', 'clientIP', 'client_ip', 'reqIp', 'remoteIP', 'ip', 'srcIP', 'xForwardedFor');
+  const uaCol  = findCol('UA', 'userAgent', 'ua', 'user_agent', 'reqUserAgent', 'reqUA', 'httpUserAgent');
+  const denCol = findCol('denied', 'deny', 'wafDenied', 'blocked');
+  const hint   = columns.length ? `Available columns: ${columns.join(', ')}` : '';
 
-  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topErrorPaths, cacheStats] = await Promise.all([
+  const hasDeny = !!denCol;
+
+  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats] = await Promise.all([
     safe(() => run(
       `SELECT toStartOfFiveMinutes(reqTimeSec) AS t, count() AS requests, round(sum(bytes)/1e9, 4) AS gb
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
@@ -235,29 +238,35 @@ app.get('/api/dashboard', async (req, res) => {
       `SELECT toStartOfFiveMinutes(reqTimeSec) AS t,
               countIf(statusCode >= 400 AND statusCode < 500) AS err4xx,
               countIf(statusCode >= 500) AS err5xx
+              ${hasDeny ? `, countIf(${denCol} = 1) AS waf_denied` : ''}
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
     )),
     ipCol
       ? safe(() => run(
           `SELECT ${ipCol} AS ip, count() AS requests, countIf(statusCode >= 400) AS errors
-           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${ipCol} != ''
            GROUP BY ip ORDER BY requests DESC LIMIT 10`
         ))
-      : { error: `IP column not found (tried: clientIP, cliIP, client_ip, reqIp, remoteIP, ip). ${hint}` },
+      : { error: `IP column not found. ${hint}` },
     uaCol
       ? safe(() => run(
           `SELECT ${uaCol} AS ua, count() AS requests
-           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${uaCol} != ''
            GROUP BY ua ORDER BY requests DESC LIMIT 10`
         ))
-      : { error: `User-agent column not found (tried: userAgent, ua, user_agent, reqUserAgent, reqUA). ${hint}` },
-    safe(() => run(
-      `SELECT reqPath AS path, count() AS total,
-              countIf(statusCode >= 400) AS errors,
-              round(countIf(statusCode >= 400) / count() * 100, 1) AS error_pct
-       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND statusCode >= 400
-       GROUP BY path ORDER BY errors DESC LIMIT 10`
-    )),
+      : { error: `User-agent column not found. ${hint}` },
+    hasDeny
+      ? safe(() => run(
+          `SELECT denyRule AS rule, denyGroup AS grp, count() AS blocked, uniq(${ipCol || 'reqPath'}) AS unique_ips
+           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${denCol} = 1
+           GROUP BY rule, grp ORDER BY blocked DESC LIMIT 10`
+        ))
+      : safe(() => run(
+          `SELECT reqPath AS path, countIf(statusCode >= 400) AS errors,
+                  round(countIf(statusCode >= 400) / count() * 100, 1) AS error_pct
+           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND statusCode >= 400
+           GROUP BY path ORDER BY errors DESC LIMIT 10`
+        )),
     safe(() => run(
       `SELECT countIf(cacheStatus = 1) AS hits, countIf(cacheStatus != 1) AS misses,
               count() AS total, round(countIf(cacheStatus = 1) / count() * 100, 1) AS hit_rate,
@@ -266,7 +275,7 @@ app.get('/api/dashboard', async (req, res) => {
     )),
   ]);
 
-  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topErrorPaths, cacheStats, _schema: { columns, ipCol, uaCol } });
+  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, _schema: { columns, ipCol, uaCol, denCol } });
 });
 
 app.listen(PORT, () => {

@@ -655,7 +655,7 @@ LIMIT 15</pre>
           <div class="dash-card">
             <div class="dash-card-hd">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              WAF / Top Error Paths
+              WAF Rules
             </div>
             <div class="dash-panel-body" id="dash-waf"><div class="dash-spin">Loading…</div></div>
           </div>
@@ -1359,7 +1359,7 @@ async function loadDashboard() {
     renderDashSecurity(data.securityEvents);
     renderDashTopIPs(data.topIPs);
     renderDashTopBots(data.topUserAgents);
-    renderDashWaf(data.topErrorPaths);
+    renderDashWaf(data.topWafRules);
     renderDashCache(data.cacheStats);
 
     const upEl = document.getElementById('dash-updated');
@@ -1456,16 +1456,16 @@ function renderDashSecurity(result) {
   const d = dashRows(result);
   if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No security events in this period</div>'; return; }
   const { rows, cols } = d;
+  const hasWaf = cols.includes('waf_denied');
   el.innerHTML = '<canvas></canvas>';
+  const datasets = [
+    { label: '4xx Errors', data: rows.map(r => dashGet(r, cols, 'err4xx')), borderColor: '#d29922', backgroundColor: '#d2992222', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
+    { label: '5xx Errors', data: rows.map(r => dashGet(r, cols, 'err5xx')), borderColor: '#f85149', backgroundColor: '#f8514933', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
+  ];
+  if (hasWaf) datasets.push({ label: 'WAF Denied', data: rows.map(r => dashGet(r, cols, 'waf_denied')), borderColor: '#a371f7', backgroundColor: '#a371f733', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 });
   dashCharts.security = new Chart(el.querySelector('canvas').getContext('2d'), {
     type: 'line',
-    data: {
-      labels: dashTime(rows, cols, 't'),
-      datasets: [
-        { label: '4xx Errors', data: rows.map(r => dashGet(r, cols, 'err4xx')), borderColor: '#d29922', backgroundColor: '#d2992222', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
-        { label: '5xx Errors', data: rows.map(r => dashGet(r, cols, 'err5xx')), borderColor: '#f85149', backgroundColor: '#f8514933', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
-      ],
-    },
+    data: { labels: dashTime(rows, cols, 't'), datasets },
     options: baseChartOpts(false),
   });
 }
@@ -1506,15 +1506,30 @@ function renderDashWaf(result) {
   if (!el) return;
   if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}</div>`; return; }
   const d = dashRows(result);
-  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No errors in this period</div>'; return; }
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No WAF blocks in this period</div>'; return; }
   const { rows, cols } = d;
-  el.innerHTML = `<table class="dtbl"><thead><tr><th>Path</th><th>Errors</th><th>Err%</th></tr></thead><tbody>${
-    rows.map(r => {
-      const path = String(dashGet(r, cols, 'path') || '');
-      const short = path.length > 28 ? path.slice(0, 28) + '…' : path;
-      return `<tr><td class="td-trunc" title="${esc(path)}">${esc(short)}</td><td style="color:var(--red)">${fmt(dashGet(r,cols,'errors'))}</td><td style="color:var(--yellow)">${dashGet(r,cols,'error_pct')}%</td></tr>`;
-    }).join('')
-  }</tbody></table>`;
+  const isWaf = cols.includes('rule') || cols.includes('grp');
+  if (isWaf) {
+    el.innerHTML = `<table class="dtbl"><thead><tr><th>Rule</th><th>Group</th><th>Blocked</th><th>Uniq IPs</th></tr></thead><tbody>${
+      rows.map(r => {
+        const rule = String(dashGet(r, cols, 'rule') || '—');
+        const grp  = String(dashGet(r, cols, 'grp')  || '—');
+        return `<tr>
+          <td class="td-trunc" title="${esc(rule)}">${esc(rule.length > 18 ? rule.slice(0,18)+'…' : rule)}</td>
+          <td class="td-trunc" title="${esc(grp)}">${esc(grp.length > 14 ? grp.slice(0,14)+'…' : grp)}</td>
+          <td style="color:var(--red)">${fmt(dashGet(r,cols,'blocked'))}</td>
+          <td>${fmt(dashGet(r,cols,'unique_ips'))}</td>
+        </tr>`;
+      }).join('')
+    }</tbody></table>`;
+  } else {
+    el.innerHTML = `<table class="dtbl"><thead><tr><th>Path</th><th>Errors</th><th>Err%</th></tr></thead><tbody>${
+      rows.map(r => {
+        const path = String(dashGet(r, cols, 'path') || '');
+        return `<tr><td class="td-trunc" title="${esc(path)}">${esc(path.length > 28 ? path.slice(0,28)+'…' : path)}</td><td style="color:var(--red)">${fmt(dashGet(r,cols,'errors'))}</td><td style="color:var(--yellow)">${dashGet(r,cols,'error_pct')}%</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+  }
 }
 
 function renderDashCache(result) {
