@@ -204,6 +204,47 @@
   .combo-label { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin-bottom: 6px; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
   @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* ── Dashboard ── */
+  .dash-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .dash-toolbar { padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
+  .dash-source { font-family: var(--mono); color: var(--accent2); font-size: 11px; background: var(--surface2); padding: 3px 8px; border-radius: 4px; }
+  .dash-content { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .dash-row-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .dash-row-panels { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
+  .dash-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .dash-card-hd { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 7px; flex-shrink: 0; white-space: nowrap; }
+  .dash-card-hd svg { color: var(--accent); flex-shrink: 0; }
+  .dash-card-hd .hd-sub { font-weight: 400; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+  .dash-chart-body { padding: 12px; position: relative; height: 210px; }
+  .dash-panel-body { padding: 10px 12px; overflow: hidden; }
+  .dtbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .dtbl th { color: var(--muted); font-weight: 500; padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .dtbl td { padding: 5px 6px; border-bottom: 1px solid #1c2128; font-family: var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+  .dtbl tr:last-child td { border-bottom: none; }
+  .dtbl tr:hover td { background: var(--surface2); }
+  .td-trunc { max-width: 150px; }
+  .stat-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 11px; color: var(--muted); }
+  .stat-val { font-size: 15px; font-weight: 700; font-family: var(--mono); }
+  .stat-val.green { color: var(--green); }
+  .stat-val.red   { color: var(--red); }
+  .stat-val.yellow{ color: var(--yellow); }
+  .cache-bar-wrap { margin-top: 10px; }
+  .cache-bar-row  { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cache-bar-lbl  { font-size: 10px; color: var(--muted); width: 36px; text-align: right; }
+  .cache-bar-track{ flex: 1; height: 8px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+  .cache-bar-fill { height: 100%; border-radius: 2px; }
+  .cache-bar-num  { font-size: 10px; color: var(--muted); font-family: var(--mono); width: 46px; }
+  .dash-empty { color: var(--muted); font-size: 12px; padding: 20px; text-align: center; }
+  .dash-err   { color: var(--red); font-size: 11px; padding: 10px 12px; line-height: 1.5; }
+  .dash-spin  { color: var(--muted); font-size: 11px; padding: 16px; text-align: center; }
+  .dash-refresh-btn { background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); padding: 4px 10px; font-size: 11px; font-weight: 500; cursor: pointer; }
+  .dash-refresh-btn:hover:not(:disabled) { color: var(--text); border-color: var(--text); }
+  .dash-refresh-btn:disabled { opacity: .4; cursor: not-allowed; }
+  @media (max-width: 1050px) { .dash-row-panels { grid-template-columns: 1fr 1fr; } }
+  @media (max-width:  700px) { .dash-row-charts { grid-template-columns: 1fr; } .dash-row-panels { grid-template-columns: 1fr 1fr; } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -219,7 +260,8 @@
   </div>
 
   <nav class="tabs" style="margin-left:16px">
-    <button class="tab active" onclick="switchTab('explorer',this)">Explorer</button>
+    <button class="tab active" onclick="switchTab('dashboard',this)">Dashboard</button>
+    <button class="tab" id="tab-explorer" onclick="switchTab('explorer',this)">Explorer</button>
     <button class="tab" onclick="switchTab('chat',this)">Chat</button>
     <button class="tab" onclick="switchTab('tips',this)">Tips</button>
   </nav>
@@ -306,7 +348,7 @@
 <main>
 
   <!-- EXPLORER -->
-  <div id="view-explorer" class="view active">
+  <div id="view-explorer" class="view">
     <div class="explorer">
 
       <!-- Sidebar -->
@@ -553,6 +595,77 @@ LIMIT 15</pre>
     </div>
   </div>
 
+  <!-- DASHBOARD -->
+  <div id="view-dashboard" class="view active">
+    <div class="dash-view">
+
+      <div class="dash-toolbar">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span>Source:</span>
+        <span class="dash-source" id="dash-source">none selected</span>
+        <button class="dash-refresh-btn" id="dash-refresh-btn" onclick="loadDashboard()">↻ Refresh</button>
+        <span id="dash-updated" style="font-size:11px;color:var(--muted)"></span>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">Last 6 hours · auto-refreshes every 5 min</span>
+      </div>
+
+      <div class="dash-content" id="dash-content">
+
+        <!-- Charts row -->
+        <div class="dash-row-charts">
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              CDN Traffic
+              <span class="hd-sub">— requests &amp; GB served</span>
+            </div>
+            <div class="dash-chart-body" id="dash-cdn"><div class="dash-spin">Loading…</div></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Security Events
+              <span class="hd-sub">— 4xx &amp; 5xx errors</span>
+            </div>
+            <div class="dash-chart-body" id="dash-security"><div class="dash-spin">Loading…</div></div>
+          </div>
+        </div>
+
+        <!-- Panels row -->
+        <div class="dash-row-panels">
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10A15.3 15.3 0 0 1 8 12a15.3 15.3 0 0 1 4-10z"/></svg>
+              Top IP Addresses
+            </div>
+            <div class="dash-panel-body" id="dash-topips"><div class="dash-spin">Loading…</div></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Top Bots / User Agents
+            </div>
+            <div class="dash-panel-body" id="dash-topbots"><div class="dash-spin">Loading…</div></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              WAF / Top Error Paths
+            </div>
+            <div class="dash-panel-body" id="dash-waf"><div class="dash-spin">Loading…</div></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-hd">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+              Cache Efficiency
+            </div>
+            <div class="dash-panel-body" id="dash-cache"><div class="dash-spin">Loading…</div></div>
+          </div>
+        </div>
+
+      </div><!-- /dash-content -->
+    </div><!-- /dash-view -->
+  </div><!-- /view-dashboard -->
+
 </main>
 
 <script>
@@ -584,6 +697,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(`view-${name}`).classList.add('active');
+  if (name === 'dashboard') initDashboard();
 }
 
 // ── Account management ─────────────────────────────────────────────────────────
@@ -1154,8 +1268,245 @@ function renderMd(text) {
     .replace(/\n/g, '<br>');
 }
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+let dashCharts = {};
+let dashRefreshTimer = null;
+
+function initDashboard() {
+  const srcEl = document.getElementById('dash-source');
+  if (currentDb && currentTable) {
+    srcEl.textContent = `${currentDb}.${currentTable}`;
+    loadDashboard();
+  } else {
+    srcEl.textContent = 'none selected';
+    document.getElementById('dash-content').innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:14px;color:var(--muted);padding:60px 20px;text-align:center">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.35"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <div style="font-size:13px">Select a <strong style="color:var(--text)">database → table</strong> in the Explorer tab, then return here.</div>
+        <button class="run-btn" style="font-size:12px;padding:6px 14px" onclick="document.getElementById('tab-explorer').click()">Open Explorer</button>
+      </div>`;
+  }
+}
+
+async function loadDashboard() {
+  if (!currentDb || !currentTable) { initDashboard(); return; }
+
+  clearTimeout(dashRefreshTimer);
+  const btn = document.getElementById('dash-refresh-btn');
+  if (btn) btn.disabled = true;
+
+  ['cdn','security','topips','topbots','waf','cache'].forEach(id => {
+    const el = document.getElementById(`dash-${id}`);
+    if (el) el.innerHTML = '<div class="dash-spin">Loading…</div>';
+  });
+  Object.values(dashCharts).forEach(c => { try { c.destroy(); } catch {} });
+  dashCharts = {};
+
+  try {
+    const res = await fetch(
+      `/api/dashboard?database=${encodeURIComponent(currentDb)}&table=${encodeURIComponent(currentTable)}`,
+      { headers: acctHeaders() }
+    );
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    renderDashCdn(data.cdnTraffic);
+    renderDashSecurity(data.securityEvents);
+    renderDashTopIPs(data.topIPs);
+    renderDashTopBots(data.topUserAgents);
+    renderDashWaf(data.topErrorPaths);
+    renderDashCache(data.cacheStats);
+
+    const upEl = document.getElementById('dash-updated');
+    if (upEl) upEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    ['cdn','security','topips','topbots','waf','cache'].forEach(id => {
+      const el = document.getElementById(`dash-${id}`);
+      if (el) el.innerHTML = `<div class="dash-err">Error: ${esc(err.message)}</div>`;
+    });
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+
+  dashRefreshTimer = setTimeout(loadDashboard, 5 * 60 * 1000);
+}
+
+// helpers ──────────────────────────────────────────────────────────────────────
+
+function dashRows(result) {
+  if (!result || result.error) return null;
+  const rows = result.rows || (Array.isArray(result) ? result : []);
+  const cols = result.columns || (rows.length && typeof rows[0] === 'object' ? Object.keys(rows[0]) : []);
+  return { rows, cols };
+}
+
+function dashGet(row, cols, col) {
+  if (Array.isArray(row)) { const i = cols.indexOf(col); return i >= 0 ? row[i] : undefined; }
+  return row[col];
+}
+
+function fmt(n) {
+  if (n == null) return '—';
+  const num = +n;
+  if (isNaN(num)) return String(n);
+  if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+  if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+  if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+  return num.toLocaleString();
+}
+
+function dashTime(rows, cols, col) {
+  return rows.map(r => {
+    const v = dashGet(r, cols, col);
+    if (v == null) return '';
+    const d = new Date(typeof v === 'number' ? v * 1000 : v);
+    return isNaN(d) ? String(v) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  });
+}
+
+function baseChartOpts(dual) {
+  const opts = {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 200 },
+    plugins: {
+      legend: { labels: { color: '#8b949e', font: { size: 11 }, boxWidth: 11, padding: 10 } },
+      tooltip: { backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1, titleColor: '#e6edf3', bodyColor: '#8b949e' },
+    },
+    scales: {
+      x: { ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 10 }, grid: { color: '#21262d' } },
+      y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' }, beginAtZero: true },
+    },
+  };
+  if (dual) opts.scales.y2 = { position: 'right', ticks: { color: '#3fb950', font: { size: 10 } }, grid: { display: false }, beginAtZero: true };
+  return opts;
+}
+
+// renderers ───────────────────────────────────────────────────────────────────
+
+function renderDashCdn(result) {
+  const el = document.getElementById('dash-cdn');
+  if (!el) return;
+  if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}</div>`; return; }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No data for this period</div>'; return; }
+  const { rows, cols } = d;
+  el.innerHTML = '<canvas></canvas>';
+  dashCharts.cdn = new Chart(el.querySelector('canvas').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dashTime(rows, cols, 't'),
+      datasets: [
+        { label: 'Requests', data: rows.map(r => dashGet(r, cols, 'requests')), borderColor: '#009bde', backgroundColor: '#009bde22', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2, yAxisID: 'y' },
+        { label: 'GB Served', data: rows.map(r => dashGet(r, cols, 'gb')),       borderColor: '#3fb950', backgroundColor: 'transparent', tension: 0.3, borderWidth: 1.5, borderDash: [4,2], pointRadius: 0, yAxisID: 'y2' },
+      ],
+    },
+    options: baseChartOpts(true),
+  });
+}
+
+function renderDashSecurity(result) {
+  const el = document.getElementById('dash-security');
+  if (!el) return;
+  if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}</div>`; return; }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No security events in this period</div>'; return; }
+  const { rows, cols } = d;
+  el.innerHTML = '<canvas></canvas>';
+  dashCharts.security = new Chart(el.querySelector('canvas').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dashTime(rows, cols, 't'),
+      datasets: [
+        { label: '4xx Errors', data: rows.map(r => dashGet(r, cols, 'err4xx')), borderColor: '#d29922', backgroundColor: '#d2992222', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
+        { label: '5xx Errors', data: rows.map(r => dashGet(r, cols, 'err5xx')), borderColor: '#f85149', backgroundColor: '#f8514933', fill: true, tension: 0.3, borderWidth: 2, pointRadius: rows.length > 60 ? 0 : 2 },
+      ],
+    },
+    options: baseChartOpts(false),
+  });
+}
+
+function renderDashTopIPs(result) {
+  const el = document.getElementById('dash-topips');
+  if (!el) return;
+  if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}<br><span style="color:var(--muted);font-size:10px">Column 'clientIP' may differ in your schema</span></div>`; return; }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No data</div>'; return; }
+  const { rows, cols } = d;
+  el.innerHTML = `<table class="dtbl"><thead><tr><th>IP</th><th>Reqs</th><th>Errors</th></tr></thead><tbody>${
+    rows.map(r => {
+      const errs = dashGet(r, cols, 'errors') || 0;
+      return `<tr><td class="td-trunc" title="${esc(dashGet(r,cols,'ip'))}">${esc(dashGet(r,cols,'ip'))}</td><td>${fmt(dashGet(r,cols,'requests'))}</td><td style="color:${+errs > 0 ? 'var(--red)' : 'var(--muted)'}">${fmt(errs)}</td></tr>`;
+    }).join('')
+  }</tbody></table>`;
+}
+
+function renderDashTopBots(result) {
+  const el = document.getElementById('dash-topbots');
+  if (!el) return;
+  if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}<br><span style="color:var(--muted);font-size:10px">Column 'userAgent' may differ in your schema</span></div>`; return; }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No data</div>'; return; }
+  const { rows, cols } = d;
+  el.innerHTML = `<table class="dtbl"><thead><tr><th>User Agent</th><th>Reqs</th></tr></thead><tbody>${
+    rows.map(r => {
+      const ua = String(dashGet(r, cols, 'ua') || '');
+      const short = ua.length > 42 ? ua.slice(0, 42) + '…' : ua;
+      return `<tr><td class="td-trunc" title="${esc(ua)}">${esc(short)}</td><td>${fmt(dashGet(r,cols,'requests'))}</td></tr>`;
+    }).join('')
+  }</tbody></table>`;
+}
+
+function renderDashWaf(result) {
+  const el = document.getElementById('dash-waf');
+  if (!el) return;
+  if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}</div>`; return; }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No errors in this period</div>'; return; }
+  const { rows, cols } = d;
+  el.innerHTML = `<table class="dtbl"><thead><tr><th>Path</th><th>Errors</th><th>Err%</th></tr></thead><tbody>${
+    rows.map(r => {
+      const path = String(dashGet(r, cols, 'path') || '');
+      const short = path.length > 28 ? path.slice(0, 28) + '…' : path;
+      return `<tr><td class="td-trunc" title="${esc(path)}">${esc(short)}</td><td style="color:var(--red)">${fmt(dashGet(r,cols,'errors'))}</td><td style="color:var(--yellow)">${dashGet(r,cols,'error_pct')}%</td></tr>`;
+    }).join('')
+  }</tbody></table>`;
+}
+
+function renderDashCache(result) {
+  const el = document.getElementById('dash-cache');
+  if (!el) return;
+  if (result?.error) { el.innerHTML = `<div class="dash-err">Error: ${esc(result.error)}</div>`; return; }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) { el.innerHTML = '<div class="dash-empty">No data</div>'; return; }
+  const { rows, cols } = d;
+  const r       = rows[0];
+  const hits    = +(dashGet(r, cols, 'hits')     || 0);
+  const misses  = +(dashGet(r, cols, 'misses')   || 0);
+  const total   = +(dashGet(r, cols, 'total')    || 1);
+  const hitRate = +(dashGet(r, cols, 'hit_rate') || 0);
+  const gb      = dashGet(r, cols, 'total_gb')   || 0;
+  const missPct = Math.max(0, 100 - hitRate);
+  const rateColor = hitRate >= 90 ? 'green' : hitRate >= 70 ? 'yellow' : 'red';
+  el.innerHTML = `
+    <div class="stat-row"><span class="stat-label">Hit Rate</span><span class="stat-val ${rateColor}">${hitRate}%</span></div>
+    <div class="stat-row"><span class="stat-label">Total Requests</span><span class="stat-val">${fmt(total)}</span></div>
+    <div class="stat-row"><span class="stat-label">GB Served</span><span class="stat-val">${gb} GB</span></div>
+    <div class="cache-bar-wrap">
+      <div class="cache-bar-row">
+        <span class="cache-bar-lbl" style="color:var(--green)">Hits</span>
+        <div class="cache-bar-track"><div class="cache-bar-fill" style="width:${hitRate}%;background:var(--green)"></div></div>
+        <span class="cache-bar-num">${fmt(hits)}</span>
+      </div>
+      <div class="cache-bar-row">
+        <span class="cache-bar-lbl" style="color:var(--red)">Misses</span>
+        <div class="cache-bar-track"><div class="cache-bar-fill" style="width:${missPct}%;background:var(--red)"></div></div>
+        <span class="cache-bar-num">${fmt(misses)}</span>
+      </div>
+    </div>`;
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
-refreshAccounts().then(() => loadDatabases());
+refreshAccounts().then(() => { loadDatabases(); initDashboard(); });
 </script>
 </body>
 </html>

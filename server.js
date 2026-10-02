@@ -191,6 +191,56 @@ app.post('/api/chat', async (req, res) => {
   res.end();
 });
 
+// ── Dashboard ──────────────────────────────────────────────────────────────────
+
+app.get('/api/dashboard', async (req, res) => {
+  const tpAccount = getTpAccount(req);
+  const { database, table } = req.query;
+  if (!database || !table) return res.status(400).json({ error: 'database and table required.' });
+
+  const fqt = `${database}.${table}`;
+  const run = sql => toolMap['tp_run_select_query'].handler({ query: sql, _tp_account: tpAccount });
+  const safe = async fn => { try { return await fn(); } catch (e) { return { error: e.message }; } };
+
+  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topErrorPaths, cacheStats] = await Promise.all([
+    safe(() => run(
+      `SELECT toStartOfFiveMinutes(reqTimeSec) AS t, count() AS requests, round(sum(bytes)/1e9, 4) AS gb
+       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
+    )),
+    safe(() => run(
+      `SELECT toStartOfFiveMinutes(reqTimeSec) AS t,
+              countIf(statusCode >= 400 AND statusCode < 500) AS err4xx,
+              countIf(statusCode >= 500) AS err5xx
+       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
+    )),
+    safe(() => run(
+      `SELECT clientIP AS ip, count() AS requests, countIf(statusCode >= 400) AS errors
+       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+       GROUP BY ip ORDER BY requests DESC LIMIT 10`
+    )),
+    safe(() => run(
+      `SELECT userAgent AS ua, count() AS requests
+       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+       GROUP BY ua ORDER BY requests DESC LIMIT 10`
+    )),
+    safe(() => run(
+      `SELECT reqPath AS path, count() AS total,
+              countIf(statusCode >= 400) AS errors,
+              round(countIf(statusCode >= 400) / count() * 100, 1) AS error_pct
+       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND statusCode >= 400
+       GROUP BY path ORDER BY errors DESC LIMIT 10`
+    )),
+    safe(() => run(
+      `SELECT countIf(cacheStatus = 1) AS hits, countIf(cacheStatus != 1) AS misses,
+              count() AS total, round(countIf(cacheStatus = 1) / count() * 100, 1) AS hit_rate,
+              round(sum(bytes) / 1e9, 2) AS total_gb
+       FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR`
+    )),
+  ]);
+
+  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topErrorPaths, cacheStats });
+});
+
 app.listen(PORT, () => {
   console.log(`TrafficPeak UI  →  http://localhost:${PORT}`);
 });
