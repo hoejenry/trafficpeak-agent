@@ -272,7 +272,8 @@ app.get('/api/dashboard', async (req, res) => {
       for (const siemT of ['siem_push', 'siem']) {
         try {
           const r = await run(
-            `SELECT ruleMessage AS rule, appliedAction AS grp, count() AS blocked, uniq(clientIP) AS unique_ips
+            `SELECT coalesce(ruleMessage, ruleMessages[1]) AS rule, appliedAction AS grp,
+                    count() AS blocked, uniq(clientIP) AS unique_ips
              FROM ${database}.${siemT}
              WHERE timestamp >= now() - INTERVAL 6 HOUR AND attack_waf = 1
              GROUP BY rule, grp ORDER BY blocked DESC LIMIT 10`
