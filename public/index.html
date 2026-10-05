@@ -1605,13 +1605,15 @@ function renderDashWaf(result) {
   const { rows, cols } = d;
   const isWaf = cols.includes('rule') || cols.includes('grp');
   if (isWaf) {
-    el.innerHTML = `<table class="dtbl"><thead><tr><th>Rule</th><th>Group</th><th>Blocked</th><th>Uniq IPs</th></tr></thead><tbody>${
+    const actionColors = { deny: 'var(--red)', monitor: 'var(--yellow)', alert: 'var(--yellow)', slow: 'var(--muted)' };
+    el.innerHTML = `<table class="dtbl"><thead><tr><th>Rule</th><th>Action</th><th>Count</th><th>Uniq IPs</th></tr></thead><tbody>${
       rows.map(r => {
         const rule = String(dashGet(r, cols, 'rule') || '—');
         const grp  = String(dashGet(r, cols, 'grp')  || '—');
+        const color = actionColors[grp.toLowerCase()] || 'var(--muted)';
         return `<tr>
-          <td class="td-trunc" title="${esc(rule)}">${esc(rule.length > 18 ? rule.slice(0,18)+'…' : rule)}</td>
-          <td class="td-trunc" title="${esc(grp)}">${esc(grp.length > 14 ? grp.slice(0,14)+'…' : grp)}</td>
+          <td class="td-trunc" title="${esc(rule)}">${esc(rule.length > 22 ? rule.slice(0,22)+'…' : rule)}</td>
+          <td style="color:${color}">${esc(grp)}</td>
           <td style="color:var(--red)">${fmt(dashGet(r,cols,'blocked'))}</td>
           <td>${fmt(dashGet(r,cols,'unique_ips'))}</td>
         </tr>`;

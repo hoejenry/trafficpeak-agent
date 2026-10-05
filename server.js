@@ -267,18 +267,34 @@ app.get('/api/dashboard', async (req, res) => {
            GROUP BY ua ORDER BY requests DESC LIMIT 10`
         ))
       : { error: `User-agent column not found. ${hint}` },
-    hasDeny
-      ? safe(() => run(
+    safe(async () => {
+      // Try siem_push then siem — authoritative WAF event source
+      for (const siemT of ['siem_push', 'siem']) {
+        try {
+          const r = await run(
+            `SELECT ruleMessage AS rule, appliedAction AS grp, count() AS blocked, uniq(clientIP) AS unique_ips
+             FROM ${database}.${siemT}
+             WHERE timestamp >= now() - INTERVAL 6 HOUR AND attack_waf = 1
+             GROUP BY rule, grp ORDER BY blocked DESC LIMIT 10`
+          );
+          if (!r.error && (r.rows?.length || r.row_count > 0)) return r;
+        } catch {}
+      }
+      // Fall back to logs table
+      if (hasDeny) {
+        return run(
           `SELECT denyRule AS rule, denyGroup AS grp, count() AS blocked, uniq(${ipCol || 'reqPath'}) AS unique_ips
            FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${denCol} = 1
            GROUP BY rule, grp ORDER BY blocked DESC LIMIT 10`
-        ))
-      : safe(() => run(
-          `SELECT reqPath AS path, countIf(statusCode >= 400) AS errors,
-                  round(countIf(statusCode >= 400) / count() * 100, 1) AS error_pct
-           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND statusCode >= 400
-           GROUP BY path ORDER BY errors DESC LIMIT 10`
-        )),
+        );
+      }
+      return run(
+        `SELECT reqPath AS path, countIf(statusCode >= 400) AS errors,
+                round(countIf(statusCode >= 400) / count() * 100, 1) AS error_pct
+         FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND statusCode >= 400
+         GROUP BY path ORDER BY errors DESC LIMIT 10`
+      );
+    }),
     safe(() => run(
       `SELECT countIf(cacheStatus = 1) AS hits, countIf(cacheStatus != 1) AS misses,
               count() AS total, round(countIf(cacheStatus = 1) / count() * 100, 1) AS hit_rate,
