@@ -222,9 +222,11 @@ app.get('/api/dashboard', async (req, res) => {
     return candidates.find(c => columns.some(col => col.toLowerCase() === c.toLowerCase())) || null;
   };
 
-  const ipCol  = findCol('cliIP', 'clientIP', 'client_ip', 'reqIp', 'remoteIP', 'ip', 'srcIP', 'xForwardedFor');
-  const uaCol  = findCol('UA', 'userAgent', 'ua', 'user_agent', 'reqUserAgent', 'reqUA', 'httpUserAgent');
-  const denCol = findCol('denied', 'deny', 'wafDenied', 'blocked');
+  const ipCol   = findCol('cliIP', 'clientIP', 'client_ip', 'reqIp', 'remoteIP', 'ip', 'srcIP', 'xForwardedFor');
+  const uaCol   = findCol('UA', 'userAgent', 'ua', 'user_agent', 'reqUserAgent', 'reqUA', 'httpUserAgent');
+  const denCol  = findCol('denied', 'deny', 'wafDenied', 'blocked');
+  const hostCol = findCol('reqHost', 'host', 'hostname', 'vhost', 'reqHostname', 'serverName');
+  const host    = hostCol || 'reqHost';
   const hint   = columns.length ? `Available columns: ${columns.join(', ')}` : '';
 
   const hasDeny = !!denCol;
@@ -239,7 +241,8 @@ app.get('/api/dashboard', async (req, res) => {
 
   const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown] = await Promise.all([
     safe(() => run(
-      `SELECT toStartOfFiveMinutes(reqTimeSec) AS t, count() AS requests, round(sum(bytes)/1e9, 4) AS gb
+      `SELECT toStartOfFiveMinutes(reqTimeSec) AS t, count() AS requests, round(sum(bytes)/1e9, 4) AS gb,
+              countIf(${BOT_FILTER}) AS bot_requests, countIf(${AI_BOT_FILTER}) AS ai_bot_requests
        FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR GROUP BY t ORDER BY t ASC`
     )),
     safe(() => run(
@@ -260,21 +263,39 @@ app.get('/api/dashboard', async (req, res) => {
       ? safe(() => run(
           `SELECT ${uaCol} AS ua, count() AS requests
            FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${uaCol} != ''
+             AND ${BOT_FILTER}
            GROUP BY ua ORDER BY requests DESC LIMIT 10`
         ))
       : { error: `User-agent column not found. ${hint}` },
-    hasDeny
-      ? safe(() => run(
+    safe(async () => {
+      // Try siem_push then siem — authoritative WAF event source
+      for (const siemT of ['siem_push', 'siem']) {
+        try {
+          const r = await run(
+            `SELECT coalesce(ruleMessage, ruleMessages[1]) AS rule, appliedAction AS grp,
+                    count() AS blocked, uniq(clientIP) AS unique_ips
+             FROM ${database}.${siemT}
+             WHERE timestamp >= now() - INTERVAL 6 HOUR AND attack_waf = 1
+             GROUP BY rule, grp ORDER BY blocked DESC LIMIT 10`
+          );
+          if (!r.error && (r.rows?.length || r.row_count > 0)) return r;
+        } catch {}
+      }
+      // Fall back to logs table
+      if (hasDeny) {
+        return run(
           `SELECT denyRule AS rule, denyGroup AS grp, count() AS blocked, uniq(${ipCol || 'reqPath'}) AS unique_ips
            FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${denCol} = 1
            GROUP BY rule, grp ORDER BY blocked DESC LIMIT 10`
-        ))
-      : safe(() => run(
-          `SELECT reqPath AS path, countIf(statusCode >= 400) AS errors,
-                  round(countIf(statusCode >= 400) / count() * 100, 1) AS error_pct
-           FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND statusCode >= 400
-           GROUP BY path ORDER BY errors DESC LIMIT 10`
-        )),
+        );
+      }
+      return run(
+        `SELECT reqPath AS path, countIf(statusCode >= 400) AS errors,
+                round(countIf(statusCode >= 400) / count() * 100, 1) AS error_pct
+         FROM ${fqt} WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND statusCode >= 400
+         GROUP BY path ORDER BY errors DESC LIMIT 10`
+      );
+    }),
     safe(() => run(
       `SELECT countIf(cacheStatus = 1) AS hits, countIf(cacheStatus != 1) AS misses,
               count() AS total, round(countIf(cacheStatus = 1) / count() * 100, 1) AS hit_rate,
@@ -309,15 +330,16 @@ app.get('/api/dashboard', async (req, res) => {
          lower(${ua}) LIKE '%cohere-ai%',        'Cohere AI',
          'Other AI/LLM'
        ) AS bot_type,
+       ${host} AS hostname,
        count() AS requests,
        uniq(${ip}) AS unique_ips
        FROM ${fqt}
        WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${AI_BOT_FILTER}
-       GROUP BY bot_type ORDER BY requests DESC`
+       GROUP BY bot_type, hostname ORDER BY requests DESC LIMIT 25`
     )),
   ]);
 
-  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, _schema: { columns, ipCol, uaCol, denCol } });
+  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, _schema: { columns, ipCol, uaCol, denCol, hostCol } });
 });
 
 app.listen(PORT, () => {
