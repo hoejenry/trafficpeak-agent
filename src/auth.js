@@ -6,7 +6,7 @@ const CONFIG_PATH     = join(homedir(), '.akamai-agent-trafficpeak.json');
 const CLAUDE_JSON     = join(homedir(), '.claude.json');
 const CLI_SOURCE_TAG  = '__cli__'; // marks accounts read from ~/.claude.json
 
-// Read all TrafficPeak-related MCP servers from ~/.claude.json
+// Read all TrafficPeak-related MCP servers from ~/.claude.json (Claude Code CLI format)
 function readClaudeCliAccounts() {
   if (!existsSync(CLAUDE_JSON)) return {};
   try {
@@ -20,6 +20,32 @@ function readClaudeCliAccounts() {
         if (!auth) continue;
         accounts[name] = { url: url.replace(/\/mcp\/?$/, ''), token: auth, source: CLI_SOURCE_TAG };
       }
+    }
+    return accounts;
+  } catch {
+    return {};
+  }
+}
+
+// Read TrafficPeak MCP servers from Claude Desktop config (mcp-remote args format)
+function readClaudeDesktopAccounts() {
+  const desktopPath = join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  if (!existsSync(desktopPath)) return {};
+  try {
+    const d = JSON.parse(readFileSync(desktopPath, 'utf8'));
+    const accounts = {};
+    for (const [name, cfg] of Object.entries(d.mcpServers || {})) {
+      const args = cfg.args || [];
+      // Handle: npx -y mcp-remote <url> --transport http-only --header "Authorization: Bearer <token>"
+      const mcpIdx = args.findIndex(a => a === 'mcp-remote');
+      if (mcpIdx === -1) continue;
+      const url = args[mcpIdx + 1] || '';
+      if (!url.includes('trafficpeak')) continue;
+      const hdrIdx = args.findIndex(a => a === '--header');
+      if (hdrIdx === -1) continue;
+      const token = (args[hdrIdx + 1] || '').replace(/^Authorization:\s*Bearer\s+/i, '');
+      if (!token) continue;
+      accounts[name] = { url: url.replace(/\/mcp\/?$/, ''), token, source: CLI_SOURCE_TAG };
     }
     return accounts;
   } catch {
@@ -41,12 +67,12 @@ export function getTrafficPeakConfig(account = 'default') {
     const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
     const cfg = config[account] || config['default'];
     if (cfg?.url && cfg?.token) {
-      return { url: cfg.url.replace(/\/$/, ''), token: cfg.token };
+      return { url: normalizeUrl(cfg.url), token: cfg.token };
     }
   }
 
-  // Fall back to ~/.claude.json (CLI-registered MCP servers)
-  const cliAccounts = readClaudeCliAccounts();
+  // Fall back to ~/.claude.json (CLI) then Claude Desktop config
+  const cliAccounts = { ...readClaudeDesktopAccounts(), ...readClaudeCliAccounts() };
   const cliCfg = cliAccounts[account] || Object.values(cliAccounts)[0];
   if (cliCfg?.url && cliCfg?.token) {
     return { url: cliCfg.url.replace(/\/$/, ''), token: cliCfg.token };
@@ -59,11 +85,17 @@ export function getTrafficPeakConfig(account = 'default') {
   );
 }
 
+function normalizeUrl(url) {
+  url = url.trim().replace(/\/mcp\/?$/, '').replace(/\/$/, '');
+  if (url && !url.startsWith('http')) url = 'https://' + url;
+  return url;
+}
+
 export function saveTrafficPeakConfig(section, url, token) {
   const config = existsSync(CONFIG_PATH)
     ? JSON.parse(readFileSync(CONFIG_PATH, 'utf8'))
     : {};
-  config[section] = { url: url.replace(/\/$/, ''), token };
+  config[section] = { url: normalizeUrl(url), token: token.trim() };
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 });
 }
 
@@ -79,8 +111,8 @@ export function listTrafficPeakAccounts() {
     ? JSON.parse(readFileSync(CONFIG_PATH, 'utf8'))
     : {};
 
-  // Merge CLI accounts in; saved GUI accounts take precedence on name collision
-  const cli = readClaudeCliAccounts();
+  // Merge Desktop + CLI accounts in; saved GUI accounts take precedence on name collision
+  const cli = { ...readClaudeDesktopAccounts(), ...readClaudeCliAccounts() };
   const merged = { ...cli, ...saved };
 
   return Object.entries(merged).map(([account, c]) => ({
