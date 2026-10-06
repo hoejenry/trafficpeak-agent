@@ -510,7 +510,7 @@
           </div>
           <div>
             <div class="combo-label">Optimal pattern</div>
-            <div class="combo-box">Query the <em>logs</em> table from the <em>nuclearregula</em> database for all HTTP errors in the <em>last hour</em>, ordered by <em>most recent timestamp</em>.</div>
+            <div class="combo-box" id="tips-combo">Query the <em>logs</em> table from the <em>nuclearregula</em> database for all HTTP errors in the <em>last hour</em>, ordered by <em>most recent timestamp</em>.</div>
           </div>
         </div>
       </div>
@@ -564,60 +564,9 @@
 
       <div class="tips-section">
         <h2><span class="ti">◈</span> Example Queries</h2>
-        <p>Copy these into the Explorer and run. All use real column names from <code>nuclearregula.logs</code>.</p>
+        <p id="tips-fqt-banner">Copy these into the Explorer and run. Loading table info…</p>
         <p style="font-size:12px;color:var(--yellow)">⚠ Max time range: 6 hours (21,600 s). Always filter on <code>reqTimeSec</code> directly — no function wrapping on the left side. Do not pass a separate <code>database</code> argument; use fully-qualified <code>database.table</code> in SQL.</p>
-        <pre>-- Top URLs by request count (last 6 hours)
-SELECT reqPath, count() AS hits
-FROM nuclearregula.logs
-WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
-GROUP BY reqPath
-ORDER BY hits DESC
-LIMIT 20</pre>
-        <pre>-- Error rate by HTTP status code (last hour)
-SELECT statusCode, count() AS n
-FROM nuclearregula.logs
-WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
-GROUP BY statusCode
-ORDER BY n DESC</pre>
-        <pre>-- Requests per minute time-series (last hour)
-SELECT toStartOfMinute(reqTimeSec) AS minute,
-       count() AS requests,
-       countIf(statusCode >= 400) AS errors
-FROM nuclearregula.logs
-WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
-GROUP BY minute
-ORDER BY minute ASC</pre>
-        <pre>-- P95 response time by edge server country (last 6 hours)
-SELECT serverCountry,
-       quantile(0.95)(turnAroundTimeMSec) AS p95_ms,
-       count() AS requests
-FROM nuclearregula.logs
-WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
-  AND turnAroundTimeMSec IS NOT NULL
-GROUP BY serverCountry
-ORDER BY p95_ms DESC
-LIMIT 20</pre>
-        <pre>-- Top source countries by bandwidth (last 6 hours)
-SELECT country,
-       round(sum(bytes) / 1e9, 2) AS gb_sent,
-       count() AS requests
-FROM nuclearregula.logs
-WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
-  AND country IS NOT NULL
-GROUP BY country
-ORDER BY gb_sent DESC
-LIMIT 10</pre>
-        <pre>-- Cache hit rate by content type (last hour)
-SELECT rspContentType,
-       countIf(cacheStatus = 1) AS hits,
-       count() AS total,
-       round(countIf(cacheStatus = 1) / count() * 100, 1) AS hit_pct
-FROM nuclearregula.logs
-WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
-  AND rspContentType IS NOT NULL
-GROUP BY rspContentType
-ORDER BY total DESC
-LIMIT 15</pre>
+        <div id="tips-queries"><div class="dash-spin" style="padding:16px 0">Loading…</div></div>
       </div>
 
       <div class="tips-section">
@@ -813,6 +762,92 @@ function switchTab(name, btn) {
   btn.classList.add('active');
   document.getElementById(`view-${name}`).classList.add('active');
   if (name === 'dashboard') initDashboard();
+  if (name === 'tips') loadTips();
+}
+
+// ── Tips ───────────────────────────────────────────────────────────────────────
+function tipsQueriesHTML(fqt) {
+  return [
+    `-- Top URLs by request count (last 6 hours)
+SELECT reqPath, count() AS hits
+FROM ${fqt}
+WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+GROUP BY reqPath
+ORDER BY hits DESC
+LIMIT 20`,
+    `-- Error rate by HTTP status code (last hour)
+SELECT statusCode, count() AS n
+FROM ${fqt}
+WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
+GROUP BY statusCode
+ORDER BY n DESC`,
+    `-- Requests per minute time-series (last hour)
+SELECT toStartOfMinute(reqTimeSec) AS minute,
+       count() AS requests,
+       countIf(statusCode >= 400) AS errors
+FROM ${fqt}
+WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
+GROUP BY minute
+ORDER BY minute ASC`,
+    `-- P95 response time by edge server country (last 6 hours)
+SELECT serverCountry,
+       quantile(0.95)(turnAroundTimeMSec) AS p95_ms,
+       count() AS requests
+FROM ${fqt}
+WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+  AND turnAroundTimeMSec IS NOT NULL
+GROUP BY serverCountry
+ORDER BY p95_ms DESC
+LIMIT 20`,
+    `-- Top source countries by bandwidth (last 6 hours)
+SELECT country,
+       round(sum(bytes) / 1e9, 2) AS gb_sent,
+       count() AS requests
+FROM ${fqt}
+WHERE reqTimeSec >= now() - INTERVAL 6 HOUR
+  AND country IS NOT NULL
+GROUP BY country
+ORDER BY gb_sent DESC
+LIMIT 10`,
+    `-- Cache hit rate by content type (last hour)
+SELECT rspContentType,
+       countIf(cacheStatus = 1) AS hits,
+       count() AS total,
+       round(countIf(cacheStatus = 1) / count() * 100, 1) AS hit_pct
+FROM ${fqt}
+WHERE reqTimeSec >= now() - INTERVAL 1 HOUR
+  AND rspContentType IS NOT NULL
+GROUP BY rspContentType
+ORDER BY total DESC
+LIMIT 15`,
+  ].map(q => `<pre>${esc(q)}</pre>`).join('\n');
+}
+
+async function loadTips() {
+  const banner  = document.getElementById('tips-fqt-banner');
+  const queries = document.getElementById('tips-queries');
+  const combo   = document.getElementById('tips-combo');
+  if (!banner || !queries) return;
+
+  try {
+    const dbRes  = await fetch('/api/databases', { headers: acctHeaders() });
+    const dbData = await dbRes.json();
+    const db = (dbData.databases || [])[0];
+    if (!db) throw new Error('No databases found for this account');
+
+    const tblRes  = await fetch(`/api/tables?database=${encodeURIComponent(db)}`, { headers: acctHeaders() });
+    const tblData = await tblRes.json();
+    const tables  = (tblData.tables || []).map(t => typeof t === 'string' ? t : (t.name || String(t)));
+    const table   = tables.find(t => t === 'logs') || tables[0] || 'logs';
+    const fqt     = `${db}.${table}`;
+
+    banner.innerHTML  = `Copy these into the Explorer and run. Using <code>${esc(fqt)}</code> — the primary table for account <strong>${esc(activeAccount)}</strong>.`;
+    queries.innerHTML = tipsQueriesHTML(fqt);
+    if (combo) combo.innerHTML = `Query the <em>${esc(table)}</em> table from the <em>${esc(db)}</em> database for all HTTP errors in the <em>last hour</em>, ordered by <em>most recent timestamp</em>.`;
+  } catch (err) {
+    banner.textContent  = `Could not load schema for account "${activeAccount}": ${err.message}`;
+    queries.innerHTML   = tipsQueriesHTML('your_database.logs');
+  }
 }
 
 // ── Account management ─────────────────────────────────────────────────────────
@@ -1899,7 +1934,11 @@ function renderDashAiBot(result) {
 refreshAccounts().then(() => { loadDatabases(); initDashboard(); });
 // Re-init dashboard when account changes so dropdowns reload
 const _origSetAccount = setAccount;
-setAccount = function(name) { _origSetAccount(name); if (document.getElementById('view-dashboard').classList.contains('active')) initDashboard(); };
+setAccount = function(name) {
+  _origSetAccount(name);
+  if (document.getElementById('view-dashboard').classList.contains('active')) initDashboard();
+  if (document.getElementById('view-tips').classList.contains('active')) loadTips();
+};
 </script>
 </body>
 </html>
