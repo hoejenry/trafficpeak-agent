@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TrafficPeak Analytics</title>
+<script>
+  // Applied before first paint to avoid a flash of the wrong theme.
+  document.documentElement.dataset.theme = localStorage.getItem('tpTheme') || 'light';
+</script>
 <style>
   :root {
     --bg: #0d1117;
@@ -21,6 +25,20 @@
     --radius: 8px;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --mono: 'SF Mono', 'Fira Code', Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --surface2: #eaeef2;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #59636e;
+    --accent: #0969da;
+    --accent2: #0969da;
+    --green: #1a7f37;
+    --yellow: #9a6700;
+    --red: #cf222e;
+    --teal: #1a7f37;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -86,7 +104,7 @@
   .results-body { flex: 1; overflow: auto; }
   .results-body table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .results-body th { position: sticky; top: 0; background: var(--surface2); color: var(--muted); font-weight: 500; padding: 6px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; z-index: 1; }
-  .results-body td { padding: 6px 12px; border-bottom: 1px solid #21262d; white-space: nowrap; font-family: var(--mono); }
+  .results-body td { padding: 6px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; font-family: var(--mono); }
   .results-body tr:hover td { background: var(--surface2); }
   .howto { padding: 24px; color: var(--muted); font-size: 13px; }
   .howto h3 { font-size: 12px; font-weight: 600; color: var(--accent2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
@@ -105,6 +123,10 @@
   .msg.user .bubble { background: var(--accent); color: #fff; border-radius: var(--radius) var(--radius) 4px var(--radius); }
   .msg.assistant .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius) var(--radius) var(--radius) 4px; }
   .bubble pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; font-family: var(--mono); font-size: 12px; margin: 8px 0; white-space: pre-wrap; word-break: break-word; }
+  .bubble table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12.5px; }
+  .bubble th, .bubble td { padding: 6px 10px; border: 1px solid var(--border); text-align: left; }
+  .bubble th { background: var(--surface2); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  .bubble td { font-family: var(--mono); white-space: nowrap; }
   .tool-call { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; margin: 6px 0; font-size: 12px; }
   .tool-name { color: var(--accent2); font-weight: 600; font-family: var(--mono); }
   .tool-args { color: var(--muted); font-family: var(--mono); margin-top: 3px; }
@@ -304,6 +326,7 @@
       </svg>
       Manage Accounts
     </button>
+    <button class="manage-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme"></button>
   </div>
 </header>
 
@@ -766,6 +789,8 @@ let dbTables      = {};     // cache: db → [table, …]
 let chatHistory   = [];
 let isStreaming   = false;
 let activeChart   = null;
+let lastRows      = [];
+let lastCols      = [];
 
 function acctHeaders(extra = {}) {
   return { 'Content-Type': 'application/json', 'X-TP-Account': activeAccount, ...extra };
@@ -941,17 +966,17 @@ async function loadDatabases() {
   }
 }
 
+function asName(d) {
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object') return String(d.name ?? d.database ?? d.table ?? JSON.stringify(d));
+  return String(d);
+}
+
 function parsePrimitive(data) {
-  const toStr = d => {
-    if (d == null) return '';
-    if (typeof d === 'string') return d;
-    if (typeof d === 'object') return d.name || d.database || d.table || String(d);
-    return String(d);
-  };
-  if (Array.isArray(data)) return data.map(toStr);
-  if (Array.isArray(data.databases)) return data.databases.map(toStr);
-  if (Array.isArray(data.tables)) return data.tables.map(toStr);
-  if (data.text) { try { return JSON.parse(data.text).map(toStr); } catch { return [data.text]; } }
+  if (Array.isArray(data)) return data.map(asName);
+  if (Array.isArray(data.databases)) return data.databases.map(asName);
+  if (Array.isArray(data.tables)) return data.tables.map(asName);
+  if (data.text) { try { return JSON.parse(data.text).map(asName); } catch { return [data.text]; } }
   return [];
 }
 
@@ -1045,11 +1070,16 @@ function showResultsView(view) {
   }
 }
 
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 function renderChart(rows, cols) {
   const toggle = document.getElementById('results-toggle');
   const panel  = document.getElementById('chart-panel');
 
   if (!rows.length || !cols.length) return;
+  lastRows = rows; lastCols = cols;
 
   const colIndex = c => cols.indexOf(c);
 
@@ -1110,23 +1140,23 @@ function renderChart(rows, cols) {
       maintainAspectRatio: false,
       animation: { duration: 300 },
       plugins: {
-        legend: { labels: { color: '#8b949e', font: { size: 12 }, boxWidth: 14 } },
+        legend: { labels: { color: cssVar('--muted'), font: { size: 12 }, boxWidth: 14 } },
         tooltip: {
-          backgroundColor: '#161b22',
-          borderColor: '#30363d',
+          backgroundColor: cssVar('--surface'),
+          borderColor: cssVar('--border'),
           borderWidth: 1,
-          titleColor: '#e6edf3',
-          bodyColor: '#8b949e',
+          titleColor: cssVar('--text'),
+          bodyColor: cssVar('--muted'),
         },
       },
       scales: {
         x: {
-          ticks: { color: '#8b949e', maxRotation: 45, font: { size: 11 }, maxTicksLimit: 20 },
-          grid: { color: '#21262d' },
+          ticks: { color: cssVar('--muted'), maxRotation: 45, font: { size: 11 }, maxTicksLimit: 20 },
+          grid: { color: cssVar('--surface2') },
         },
         y: {
-          ticks: { color: '#8b949e', font: { size: 11 } },
-          grid: { color: '#21262d' },
+          ticks: { color: cssVar('--muted'), font: { size: 11 } },
+          grid: { color: cssVar('--surface2') },
         },
       },
     },
@@ -1354,13 +1384,89 @@ function esc(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-function renderMd(text) {
-  return esc(text)
-    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+function inlineMd(s) {
+  return s
     .replace(/`([^`]+)`/g, '<code style="background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:var(--mono)">$1</code>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+const TABLE_ROW_RE = /^\s*\|?.*\|.*\|?\s*$/;
+const TABLE_SEP_RE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/;
+
+function splitTableRow(row) {
+  return row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+}
+
+const NUMERIC_CELL_RE = /^[-+]?\$?\d{1,3}(,\d{3})*(\.\d+)?\s*[a-zA-Z%]{0,4}$/;
+
+// Explicit :---:/---: (center/right) wins since those are deliberate choices.
+// A plain --- or :--- (left) doesn't block it — models emit ':---' under every
+// column out of habit, not as an instruction to left-align numbers — so those
+// still fall through to auto-detecting numeric columns for right-align.
+function colAlignment(sepCell, bodyRows, colIndex) {
+  const sep = (sepCell || '').trim();
+  if (/^:-+:$/.test(sep)) return 'center';
+  if (/^-+:$/.test(sep)) return 'right';
+  const vals = bodyRows.map(r => (r[colIndex] || '').trim()).filter(Boolean);
+  return (vals.length && vals.every(v => NUMERIC_CELL_RE.test(v))) ? 'right' : null;
+}
+
+function tableToHtml(rows) {
+  const header = splitTableRow(rows[0]);
+  const sep    = splitTableRow(rows[1]);
+  const body   = rows.slice(2).map(splitTableRow);
+  const aligns = header.map((_, i) => colAlignment(sep[i], body, i));
+  const attr   = i => aligns[i] ? ` style="text-align:${aligns[i]}"` : '';
+
+  const thead = `<tr>${header.map((h, i) => `<th${attr(i)}>${inlineMd(h)}</th>`).join('')}</tr>`;
+  const tbody = body.map(r => `<tr>${r.map((c, i) => `<td${attr(i)}>${inlineMd(c)}</td>`).join('')}</tr>`).join('');
+  return `<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+}
+
+function renderMd(text) {
+  // Pull out fenced code blocks first so table/inline parsing can't touch their contents.
+  const codeBlocks = [];
+  const withPlaceholders = esc(text).replace(/```([\s\S]*?)```/g, (_, code) => {
+    codeBlocks.push(code);
+    return `\u0000CODE${codeBlocks.length - 1}\u0000`;
+  });
+
+  const lines = withPlaceholders.split('\n');
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (TABLE_ROW_RE.test(lines[i]) && lines[i + 1] !== undefined && TABLE_SEP_RE.test(lines[i + 1])) {
+      const tableLines = [lines[i], lines[i + 1]];
+      i += 2;
+      while (i < lines.length && TABLE_ROW_RE.test(lines[i]) && lines[i].trim() !== '') {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      out.push(tableToHtml(tableLines));
+    } else {
+      out.push(inlineMd(lines[i]));
+      i++;
+    }
+  }
+
+  return out.join('<br>').replace(/\u0000CODE(\d+)\u0000/g, (_, idx) => `<pre>${codeBlocks[+idx]}</pre>`);
+}
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function updateThemeBtn() {
+  const light = document.documentElement.dataset.theme === 'light';
+  document.getElementById('theme-btn').innerHTML = light
+    ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> Light'
+    : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Dark';
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('tpTheme', next);
+  updateThemeBtn();
+  if (activeChart) renderChart(lastRows, lastCols); // re-draw with theme-correct colors
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -1740,10 +1846,8 @@ function renderDashAiBot(result) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-refreshAccounts().then(() => { loadDatabases(); initDashboard(); });
-// Re-init dashboard when account changes so dropdowns reload
-const _origSetAccount = setAccount;
-setAccount = function(name) { _origSetAccount(name); if (document.getElementById('view-dashboard').classList.contains('active')) initDashboard(); };
+updateThemeBtn();
+refreshAccounts().then(() => loadDatabases());
 </script>
 </body>
 </html>
