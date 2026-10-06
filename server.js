@@ -239,7 +239,9 @@ app.get('/api/dashboard', async (req, res) => {
 
   const BOT_FILTER = `(lower(${ua}) LIKE '%bot%' OR lower(${ua}) LIKE '%crawl%' OR lower(${ua}) LIKE '%spider%' OR lower(${ua}) LIKE '%slurp%' OR lower(${ua}) LIKE '%scan%')`;
 
-  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown] = await Promise.all([
+  const countryCol = findCol('country', 'geoCountry', 'clientCountry', 'geo_country');
+
+  const [cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, botByCountry] = await Promise.all([
     safe(() => run(
       `SELECT toStartOfFiveMinutes(reqTimeSec) AS t, count() AS requests, round(sum(bytes)/1e9, 4) AS gb,
               countIf(${BOT_FILTER}) AS bot_requests, countIf(${AI_BOT_FILTER}) AS ai_bot_requests
@@ -337,9 +339,18 @@ app.get('/api/dashboard', async (req, res) => {
        WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${AI_BOT_FILTER}
        GROUP BY bot_type, hostname ORDER BY requests DESC LIMIT 25`
     )),
+    countryCol
+      ? safe(() => run(
+          `SELECT ${countryCol} AS country, count() AS bot_requests, uniq(${ip}) AS unique_ips
+           FROM ${fqt}
+           WHERE reqTimeSec >= now() - INTERVAL 6 HOUR AND ${BOT_FILTER}
+             AND ${countryCol} IS NOT NULL AND ${countryCol} != ''
+           GROUP BY country ORDER BY bot_requests DESC LIMIT 50`
+        ))
+      : { error: `Country column not found. ${hint}` },
   ]);
 
-  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, _schema: { columns, ipCol, uaCol, denCol, hostCol } });
+  res.json({ cdnTraffic, securityEvents, topIPs, topUserAgents, topWafRules, cacheStats, summary, aiBotBreakdown, botByCountry, _schema: { columns, ipCol, uaCol, denCol, hostCol, countryCol } });
 });
 
 app.listen(PORT, () => {

@@ -223,6 +223,18 @@
 
   /* ── AI Bot panel ── */
   .dash-row-aibot { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  /* ── Geo panel ── */
+  .dash-geo-wrap  { display: grid; grid-template-columns: 1fr 240px; height: 240px; }
+  .dash-geo-map   { position: relative; overflow: hidden; }
+  .dash-geo-map canvas { width: 100% !important; height: 100% !important; }
+  .dash-geo-list  { border-left: 1px solid var(--border); overflow-y: auto; padding: 6px 10px; }
+  .geo-row        { display: flex; align-items: center; gap: 7px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .geo-row:last-child { border-bottom: none; }
+  .geo-flag       { font-size: 16px; line-height: 1; flex-shrink: 0; }
+  .geo-name       { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .geo-bar-wrap   { width: 56px; height: 4px; background: var(--surface2); border-radius: 2px; flex-shrink: 0; }
+  .geo-bar-fill   { height: 100%; border-radius: 2px; background: #a371f7; }
+  .geo-count      { width: 40px; text-align: right; color: var(--muted); font-family: var(--mono); font-size: 11px; flex-shrink: 0; }
   .aibot-bar-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid #1c2128; }
   .aibot-bar-row:last-child { border-bottom: none; }
   .aibot-bar-name { font-size: 11px; color: var(--text); width: 180px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -273,6 +285,7 @@
   @media (max-width:  700px) { .dash-row-charts { grid-template-columns: 1fr; } .dash-row-panels { grid-template-columns: 1fr 1fr; } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo@4.3.3/build/index.umd.min.js"></script>
 </head>
 <body>
 
@@ -748,6 +761,19 @@ LIMIT 15</pre>
               <span class="hd-sub">— requests &amp; unique IPs</span>
             </div>
             <div class="dash-panel-body" id="dash-aibot-tbl"><div class="dash-spin">Loading…</div></div>
+          </div>
+        </div>
+
+        <!-- Geo panel row -->
+        <div class="dash-card">
+          <div class="dash-card-hd">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10A15.3 15.3 0 0 1 8 12a15.3 15.3 0 0 1 4-10z"/></svg>
+            Bot Traffic by Country
+            <span class="hd-sub">— all bots, last 6h</span>
+          </div>
+          <div class="dash-geo-wrap">
+            <div class="dash-geo-map" id="dash-geo-map"><div class="dash-spin" style="padding:20px">Loading…</div></div>
+            <div class="dash-geo-list" id="dash-geo-list"><div class="dash-spin">Loading…</div></div>
           </div>
         </div>
 
@@ -1450,6 +1476,7 @@ async function loadDashboard() {
     renderDashWaf(data.topWafRules);
     renderDashCache(data.cacheStats);
     renderDashAiBot(data.aiBotBreakdown);
+    renderDashGeo(data.botByCountry);
 
     const upEl = document.getElementById('dash-updated');
     if (upEl) upEl.textContent = `· updated ${new Date().toLocaleTimeString()}`;
@@ -1595,6 +1622,135 @@ function renderDashTopBots(result) {
   }</tbody></table>`;
 }
 
+
+// ── Geo panel ─────────────────────────────────────────────────────────────────
+const ISO2_NUM={AF:4,AL:8,DZ:12,AS:16,AD:20,AO:24,AG:28,AR:32,AM:51,AU:36,AT:40,AZ:31,BS:44,BH:48,BD:50,BB:52,BY:112,BE:56,BZ:84,BJ:204,BT:64,BO:68,BA:70,BW:72,BR:76,BN:96,BG:100,BF:854,BI:108,CV:132,KH:116,CM:120,CA:124,CF:140,TD:148,CL:152,CN:156,CO:170,KM:174,CG:178,CD:180,CR:188,CI:384,HR:191,CU:192,CY:196,CZ:203,DK:208,DJ:262,DM:212,DO:214,EC:218,EG:818,SV:222,GQ:226,ER:232,EE:233,SZ:748,ET:231,FJ:242,FI:246,FR:250,GA:266,GM:270,GE:268,DE:276,GH:288,GR:300,GD:308,GT:320,GN:324,GW:624,GY:328,HT:332,VA:336,HN:340,HK:344,HU:348,IS:352,IN:356,ID:360,IR:364,IQ:368,IE:372,IL:376,IT:380,JM:388,JP:392,JO:400,KZ:398,KE:404,KI:296,KP:408,KR:410,KW:414,KG:417,LA:418,LV:428,LB:422,LS:426,LR:430,LY:434,LI:438,LT:440,LU:442,MO:446,MG:450,MW:454,MY:458,MV:462,ML:466,MT:470,MH:584,MR:478,MU:480,MX:484,FM:583,MD:498,MC:492,MN:496,ME:499,MA:504,MZ:508,MM:104,NA:516,NR:520,NP:524,NL:528,NZ:554,NI:558,NE:562,NG:566,MK:807,NO:578,OM:512,PK:586,PW:585,PA:591,PG:598,PY:600,PE:604,PH:608,PL:616,PT:620,QA:634,RO:642,RU:643,RW:646,KN:659,LC:662,VC:670,WS:882,SM:674,ST:678,SA:682,SN:686,RS:688,SC:690,SL:694,SG:702,SK:703,SI:705,SB:90,SO:706,ZA:710,SS:728,ES:724,LK:144,SD:729,SR:740,SE:752,CH:756,SY:760,TW:158,TJ:762,TZ:834,TH:764,TL:626,TG:768,TO:776,TT:780,TN:788,TR:792,TM:795,TV:798,UG:800,UA:804,AE:784,GB:826,US:840,UY:858,UZ:860,VU:548,VE:862,VN:704,YE:887,ZM:894,ZW:716,PS:275,XK:383,TF:260,GF:254,RE:638,MQ:474,GP:312,NC:540,PF:258,KY:136,BM:60,VI:850,PR:630,CW:531,AW:533,SX:534};
+const COUNTRY_NAMES={AF:'Afghanistan',AL:'Albania',DZ:'Algeria',AD:'Andorra',AO:'Angola',AG:'Antigua',AR:'Argentina',AM:'Armenia',AU:'Australia',AT:'Austria',AZ:'Azerbaijan',BS:'Bahamas',BH:'Bahrain',BD:'Bangladesh',BB:'Barbados',BY:'Belarus',BE:'Belgium',BZ:'Belize',BJ:'Benin',BT:'Bhutan',BO:'Bolivia',BA:'Bosnia',BW:'Botswana',BR:'Brazil',BN:'Brunei',BG:'Bulgaria',BF:'Burkina Faso',BI:'Burundi',CV:'Cabo Verde',KH:'Cambodia',CM:'Cameroon',CA:'Canada',CF:'C. African Rep.',TD:'Chad',CL:'Chile',CN:'China',CO:'Colombia',KM:'Comoros',CG:'Congo',CD:'Congo DR',CR:'Costa Rica',CI:"Côte d'Ivoire",HR:'Croatia',CU:'Cuba',CY:'Cyprus',CZ:'Czechia',DK:'Denmark',DJ:'Djibouti',DO:'Dominican Rep.',EC:'Ecuador',EG:'Egypt',SV:'El Salvador',GQ:'Equatorial Guinea',ER:'Eritrea',EE:'Estonia',SZ:'Eswatini',ET:'Ethiopia',FJ:'Fiji',FI:'Finland',FR:'France',GA:'Gabon',GM:'Gambia',GE:'Georgia',DE:'Germany',GH:'Ghana',GR:'Greece',GD:'Grenada',GT:'Guatemala',GN:'Guinea',GW:'Guinea-Bissau',GY:'Guyana',HT:'Haiti',HN:'Honduras',HK:'Hong Kong',HU:'Hungary',IS:'Iceland',IN:'India',ID:'Indonesia',IR:'Iran',IQ:'Iraq',IE:'Ireland',IL:'Israel',IT:'Italy',JM:'Jamaica',JP:'Japan',JO:'Jordan',KZ:'Kazakhstan',KE:'Kenya',KP:'North Korea',KR:'South Korea',KW:'Kuwait',KG:'Kyrgyzstan',LA:'Laos',LV:'Latvia',LB:'Lebanon',LS:'Lesotho',LR:'Liberia',LY:'Libya',LI:'Liechtenstein',LT:'Lithuania',LU:'Luxembourg',MO:'Macao',MG:'Madagascar',MW:'Malawi',MY:'Malaysia',MV:'Maldives',ML:'Mali',MT:'Malta',MR:'Mauritania',MU:'Mauritius',MX:'Mexico',MD:'Moldova',MC:'Monaco',MN:'Mongolia',ME:'Montenegro',MA:'Morocco',MZ:'Mozambique',MM:'Myanmar',NA:'Namibia',NP:'Nepal',NL:'Netherlands',NZ:'New Zealand',NI:'Nicaragua',NE:'Niger',NG:'Nigeria',MK:'North Macedonia',NO:'Norway',OM:'Oman',PK:'Pakistan',PA:'Panama',PG:'Papua New Guinea',PY:'Paraguay',PE:'Peru',PH:'Philippines',PL:'Poland',PT:'Portugal',QA:'Qatar',RO:'Romania',RU:'Russia',RW:'Rwanda',SA:'Saudi Arabia',SN:'Senegal',RS:'Serbia',SC:'Seychelles',SL:'Sierra Leone',SG:'Singapore',SK:'Slovakia',SI:'Slovenia',SO:'Somalia',ZA:'South Africa',SS:'South Sudan',ES:'Spain',LK:'Sri Lanka',SD:'Sudan',SR:'Suriname',SE:'Sweden',CH:'Switzerland',SY:'Syria',TW:'Taiwan',TJ:'Tajikistan',TZ:'Tanzania',TH:'Thailand',TL:'Timor-Leste',TG:'Togo',TO:'Tonga',TT:'Trinidad',TN:'Tunisia',TR:'Turkey',TM:'Turkmenistan',UG:'Uganda',UA:'Ukraine',AE:'UAE',GB:'UK',US:'United States',UY:'Uruguay',UZ:'Uzbekistan',VU:'Vanuatu',VE:'Venezuela',VN:'Vietnam',YE:'Yemen',ZM:'Zambia',ZW:'Zimbabwe',PS:'Palestine',XK:'Kosovo'};
+
+function flagEmoji(iso2) {
+  if (!iso2 || iso2.length !== 2) return '🌐';
+  try {
+    return String.fromCodePoint(
+      iso2.toUpperCase().charCodeAt(0) - 65 + 0x1F1E6,
+      iso2.toUpperCase().charCodeAt(1) - 65 + 0x1F1E6
+    );
+  } catch { return '🌐'; }
+}
+
+let _worldData = null;
+
+async function renderDashGeo(result) {
+  const mapEl  = document.getElementById('dash-geo-map');
+  const listEl = document.getElementById('dash-geo-list');
+  if (!mapEl || !listEl) return;
+  if (result?.error) {
+    mapEl.innerHTML  = `<div class="dash-err">${esc(result.error)}</div>`;
+    listEl.innerHTML = '';
+    return;
+  }
+  const d = dashRows(result);
+  if (!d || !d.rows.length) {
+    mapEl.innerHTML  = '<div class="dash-empty">No bot traffic data</div>';
+    listEl.innerHTML = '';
+    return;
+  }
+  const { rows, cols } = d;
+
+  // Build country → value map (ISO2 → requests)
+  const countryData = {};
+  rows.forEach(r => {
+    const iso2 = String(dashGet(r, cols, 'country') || '');
+    countryData[iso2] = (+(dashGet(r, cols, 'bot_requests') || 0));
+  });
+  const maxVal = Math.max(...Object.values(countryData), 1);
+
+  // Right panel: ranked list
+  listEl.innerHTML = rows.slice(0, 20).map(r => {
+    const iso2  = String(dashGet(r, cols, 'country') || '');
+    const reqs  = +(dashGet(r, cols, 'bot_requests') || 0);
+    const pct   = (reqs / maxVal * 100).toFixed(0);
+    const name  = COUNTRY_NAMES[iso2] || iso2;
+    return `<div class="geo-row">
+      <span class="geo-flag">${flagEmoji(iso2)}</span>
+      <span class="geo-name" title="${esc(name)}">${esc(name)}</span>
+      <div class="geo-bar-wrap"><div class="geo-bar-fill" style="width:${pct}%"></div></div>
+      <span class="geo-count">${fmt(reqs)}</span>
+    </div>`;
+  }).join('');
+
+  // Register chartjs-chart-geo if available
+  if (typeof ChartGeo === 'undefined') {
+    mapEl.innerHTML = '<div class="dash-err">Map library not loaded</div>';
+    return;
+  }
+  try {
+    Chart.register(ChartGeo.ChoroplethController, ChartGeo.ProjectionScale, ChartGeo.ColorScale, ChartGeo.GeoFeature);
+  } catch {}
+
+  // Load world topojson (cached)
+  if (!_worldData) {
+    try {
+      const resp = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+      _worldData = await resp.json();
+    } catch (e) {
+      mapEl.innerHTML = '<div class="dash-err">Could not load map data</div>';
+      return;
+    }
+  }
+  const countries = ChartGeo.topojson.feature(_worldData, _worldData.objects.countries).features;
+
+  mapEl.innerHTML = '<canvas></canvas>';
+  dashCharts.geo = new Chart(mapEl.querySelector('canvas').getContext('2d'), {
+    type: 'choropleth',
+    data: {
+      labels: countries.map(c => c.id),
+      datasets: [{
+        label: 'Bot Requests',
+        borderColor: '#30363d',
+        borderWidth: 0.4,
+        data: countries.map(c => {
+          // Find ISO2 key whose numeric maps to this feature id
+          const iso2 = Object.keys(ISO2_NUM).find(k => ISO2_NUM[k] === c.id);
+          const val  = iso2 ? (countryData[iso2] ?? NaN) : NaN;
+          return { feature: c, value: val };
+        }),
+      }],
+    },
+    options: {
+      showOutline: false,
+      showGraticule: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: ctx => {
+              const iso2 = Object.keys(ISO2_NUM).find(k => ISO2_NUM[k] === ctx[0]?.raw?.feature?.id);
+              return COUNTRY_NAMES[iso2] || iso2 || 'Unknown';
+            },
+            label: ctx => {
+              const v = ctx.raw?.value;
+              return isNaN(v) || v === undefined ? 'No bot traffic' : `${fmt(v)} bot requests`;
+            },
+          }
+        }
+      },
+      scales: {
+        projection: { axis: 'x', projection: 'naturalEarth1' },
+        color: {
+          axis: 'x',
+          missing: '#1c2128',
+          min: 0,
+          max: maxVal,
+          interpolate: t => {
+            // Purple sequential: #1c2128 (0) → #a371f7 (1), sqrt-spread
+            const s = Math.pow(t, 0.45);
+            return `rgb(${Math.round(28+s*135)},${Math.round(33+s*80)},${Math.round(40+s*207)})`;
+          },
+        },
+      },
+    },
+  });
+}
 
 function renderDashWaf(result) {
   const el = document.getElementById('dash-waf');
